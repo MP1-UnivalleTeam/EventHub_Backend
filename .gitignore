@@ -1,17 +1,73 @@
-# Variables de entorno y credenciales
+# =========================
+# VARIABLES DE ENTORNO
+# =========================
 .env
+.env.*
+!.env.example
 
-# Entornos virtuales
+
+# =========================
+# ENTORNOS VIRTUALES
+# =========================
+.venv/
 venv/
 env/
 ENV/
 
-# Caché y archivos compilados de Python
+
+# =========================
+# PYTHON
+# =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 *.pyo
 *.pyd
 
-# Archivos de editores de código
+
+# =========================
+# FASTAPI / UVICORN
+# =========================
+*.log
+
+
+# =========================
+# TESTING / COVERAGE
+# =========================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+
+# =========================
+# TYPE CHECKERS / LINTERS
+# =========================
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+
+# =========================
+# IDEs / EDITORES
+# =========================
 .vscode/
 .idea/
+*.swp
+*.swo
+
+
+# =========================
+# SISTEMA OPERATIVO
+# =========================
+.DS_Store
+Thumbs.db
+
+
+# =========================
+# BASES DE DATOS LOCALES
+# =========================
+*.sqlite
+*.sqlite3
