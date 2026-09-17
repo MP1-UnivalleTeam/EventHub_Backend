@@ -11,7 +11,7 @@ Describe los pasos que tomaste para probar que los cambios funcionan como se esp
 Víncula cualquier ticket o issue relacionado con este PR.
 
 ### Captura de pantalla (si aplica)
-Si los cammbios afectan a la interfaz de usuario, por favor adjunta capturas de pantalla.
+Si los cambios afectan a la interfaz de usuario, por favor adjunta capturas de pantalla.
 
 ### Checklist
 - [ ] He seguido las convenciones de estilo de código de este repositorio.
