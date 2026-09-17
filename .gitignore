@@ -1,30 +1,38 @@
 # =========================
-# Python
-# =========================
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
-
-# =========================
-# Environment variables
+# VARIABLES DE ENTORNO
 # =========================
 .env
 .env.*
 !.env.example
 
+
 # =========================
-# FastAPI / Uvicorn
+# ENTORNOS VIRTUALES
+# =========================
+.venv/
+venv/
+env/
+ENV/
+
+
+# =========================
+# PYTHON
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+
+# =========================
+# FASTAPI / UVICORN
 # =========================
 *.log
 
+
 # =========================
-# Testing / Coverage
+# TESTING / COVERAGE
 # =========================
 .pytest_cache/
 .coverage
@@ -33,27 +41,33 @@ htmlcov/
 .tox/
 .nox/
 
+
 # =========================
-# Type checkers / Linters
+# TYPE CHECKERS / LINTERS
 # =========================
 .mypy_cache/
 .ruff_cache/
 .pyright/
 
+
 # =========================
-# IDEs / Editors
+# IDEs / EDITORES
 # =========================
 .vscode/
 .idea/
+*.swp
+*.swo
+
 
 # =========================
-# OS
+# SISTEMA OPERATIVO
 # =========================
 .DS_Store
 Thumbs.db
 
+
 # =========================
-# Local database / generated files
+# BASES DE DATOS LOCALES
 # =========================
 *.sqlite
 *.sqlite3
