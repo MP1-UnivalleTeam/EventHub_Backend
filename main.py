@@ -6,6 +6,14 @@ from routers import eventos, subtareas
 
 app = FastAPI(title="EventHub API", version="1.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite conexiones desde Vercel y localhost
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite GET, POST, PUT, PATCH, DELETE, OPTIONS
+    allow_headers=["*"],  # Permite todas las cabeceras necesarias
+)
+
 origenes_locales = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
