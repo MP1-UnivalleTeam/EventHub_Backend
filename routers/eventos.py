@@ -5,7 +5,7 @@ from modelos import Evento, EventoActualizarParcial
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/eventos", tags=["Eventos"])
+router = APIRouter(prefix="/api/eventos", tags=["Eventos"])
 
 @router.get("/")
 def obtener_eventos():
