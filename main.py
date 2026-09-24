@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
 from routers import eventos, subtareas
 
-app = FastAPI(title="EventHub API", version="1.1.0")
+app = FastAPI(title="EventHub API", version="1.1.0", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
-
+ 
 app.include_router(eventos.router)
 app.include_router(subtareas.router)
 
