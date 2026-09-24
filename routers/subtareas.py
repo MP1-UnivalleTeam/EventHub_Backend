@@ -1,13 +1,17 @@
 from fastapi import APIRouter, HTTPException, status
 from database import supabase
 from modelos import Subtarea, SubtareaActualizarParcial
+from typing import Optional
 
 router = APIRouter(prefix="/subtareas", tags=["Subtareas"])
 
 @router.get("/")
-def obtener_subtareas():
+def obtener_subtareas(evento_id: Optional[str] = None):
     try:
-        response = supabase.table("subtareas").select("*").execute()
+        query = supabase.table("subtareas").select("*")
+        if evento_id:
+            query = query.eq("evento_id", evento_id)
+        response = query.execute()
         return response.data
     except Exception as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Error al consultar subtareas.") from error
