@@ -27,7 +27,7 @@ def obtener_evento(evento_id: str):
         logger.exception("No fue posible consultar el evento")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No fue posible consultar el evento.") from error
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED)
 def crear_evento(evento: Evento):
     try:
         datos_evento = evento.model_dump()
