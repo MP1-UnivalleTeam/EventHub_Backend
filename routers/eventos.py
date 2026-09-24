@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/eventos", tags=["Eventos"])
 
-@router.get("")
+@router.get("/")
 def obtener_eventos():
     try:
         response = supabase.table("eventos").select("*").order("creado_en", desc=True).execute()
