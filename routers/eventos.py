@@ -16,6 +16,17 @@ def obtener_eventos():
         logger.exception("No fue posible consultar eventos")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No fue posible consultar los eventos.") from error
 
+@router.get("/{evento_id}")
+def obtener_evento(evento_id: str):
+    try:
+        response = supabase.table("eventos").select("*").eq("id", evento_id.strip()).execute()
+        if not response.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evento no encontrado")
+        return response.data[0]
+    except Exception as error:
+        logger.exception("No fue posible consultar el evento")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No fue posible consultar el evento.") from error
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def crear_evento(evento: Evento):
     try:
