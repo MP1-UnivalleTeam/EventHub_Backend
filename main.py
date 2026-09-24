@@ -6,37 +6,33 @@ from routers import eventos, subtareas
 
 app = FastAPI(title="EventHub API", version="1.1.0", redirect_slashes=False)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Permite conexiones desde Vercel y localhost
-    allow_credentials=True,
-    allow_methods=["*"],  # Permite GET, POST, PUT, PATCH, DELETE, OPTIONS
-    allow_headers=["*"],  # Permite todas las cabeceras necesarias
-)
-
-origenes_locales = [
+# Definir orígenes permitidos de manera consolidada
+origenes_permitidos = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    "https://eventhub-frontend-odh5ligps-univalleteam-4136.vercel.app", # Tu URL exacta actual de Vercel
 ]
 
-origenes_configurados = [
+# Agregar orígenes adicionales desde variables de entorno si existen
+origenes_env = [
     origen.strip()
     for origen in os.getenv("ALLOWED_ORIGINS", "").split(",")
     if origen.strip()
 ]
+origenes_permitidos.extend(origenes_env)
 
+# Única llamada a add_middleware para CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[*origenes_locales, *origenes_configurados],
+    allow_origins=origenes_permitidos,
     allow_origin_regex=r"https://.*\.vercel\.app" if os.getenv("ALLOW_VERCEL_PREVIEWS") == "true" else None,
-    allow_credentials=False,
-    # ¡Actualizado para permitir todos los métodos requeridos por el frontend!
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["*"],
 )
- 
+
 app.include_router(eventos.router)
 app.include_router(subtareas.router)
 
