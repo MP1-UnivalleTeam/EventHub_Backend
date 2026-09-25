@@ -9,7 +9,7 @@ class Evento(BaseModel):
     descripcion: Optional[str] = Field(default=None, max_length=500)
     fecha: date
     horas: float = Field(..., gt=0)
-    usuario_responsable: Optional[str] = Field(..., min_length=1, max_length=150)
+    usuario_responsable: str = Field(..., min_length=1, max_length=150)
 
     @field_validator("titulo")
     def titulo_no_vacio(cls, value: str) -> str:
