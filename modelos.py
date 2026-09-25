@@ -9,7 +9,7 @@ class Evento(BaseModel):
     descripcion: Optional[str] = Field(default=None, max_length=500)
     fecha: date
     horas: float = Field(..., gt=0)
-    usuario_responsable: Optional[str] = Field(default=None, max_length=150)
+    usuario_responsable: Optional[str] = Field(..., min_length=1, max_length=150)
 
     @field_validator("titulo")
     def titulo_no_vacio(cls, value: str) -> str:
@@ -28,13 +28,11 @@ class Evento(BaseModel):
         return value.strip() or None
 
     @field_validator("usuario_responsable")
-    def limpiar_usuario_responsable(
-        cls, value: Optional[str]
-    ) -> Optional[str]:
-        if value is None:
-            return None
-
-        return value.strip() or None
+    def limpiar_usuario_responsable(cls, value: str) -> str:
+        usuario = value.strip()
+        if not usuario:
+            raise ValueError("El usuario responsable es requerido.")
+        return usuario
 
 
 class EventoActualizarParcial(BaseModel):
