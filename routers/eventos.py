@@ -32,18 +32,27 @@ def crear_evento(evento: Evento):
     try:
         datos_evento = evento.model_dump()
         datos_evento["fecha"] = evento.fecha.isoformat()
-        
+
         response = supabase.table("eventos").insert(datos_evento).execute()
-        
+
         if not response.data:
-            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="La base de datos no devolvió el evento creado.")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="La base de datos no devolvió el evento creado."
+            )
+
         return response.data[0]
+
     except HTTPException:
         raise
+
     except Exception as error:
         logger.exception("No fue posible crear el evento")
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="No fue posible guardar el evento.") from error
-
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No fue posible guardar el evento."
+        ) from error
+    
 @router.put("/{evento_id}")
 def actualizar_evento(evento_id: str, evento: Evento):
     try:
