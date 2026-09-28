@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
 from modelos import LoginRequest
-from routers import eventos, hoy, subtareas
+from routers import eventos, hoy, subtareas, usuario
 
 app = FastAPI(title="EventHub API", version="1.1.0", redirect_slashes=False)
 
@@ -37,6 +37,7 @@ app.add_middleware(
 app.include_router(eventos.router)
 app.include_router(subtareas.router)
 app.include_router(hoy.router)
+app.include_router(usuario.router)
 
 
 @app.post("/auth/login", tags=["Autenticación"])

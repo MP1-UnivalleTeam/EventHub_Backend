@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictInt, field_validator
 
 
 class Evento(BaseModel):
@@ -143,3 +143,18 @@ class LoginRequest(BaseModel):
     @field_validator("email")
     def limpiar_email(cls, value: str) -> str:
         return value.strip().lower()
+
+class ConfiguracionUsuarioRequest(BaseModel):
+    horas_dia: StrictInt = Field(..., ge=1, le=16)
+
+    @field_validator("horas_dia")
+    def validar_horas_dia(cls, value: int) -> int:
+        if isinstance(value, bool):
+            raise ValueError("Las horas por día deben ser un número entero entre 1 y 16.")
+        return value
+
+
+class ConfiguracionUsuarioResponse(BaseModel):
+    usuario_id: str
+    horas_dia: int
+

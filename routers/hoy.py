@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth import get_current_user
 from database import supabase
+from routers.usuario import obtener_horas_dia
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ def ordenar_grupo(subtareas: list[dict], prioridad: str) -> list[dict]:
     )
 
 
-def preparar_hoy(subtareas: list[dict], hoy: date) -> dict:
+def preparar_hoy(subtareas: list[dict], hoy: date, horas_dia: int = 6) -> dict:
     vencidas: list[dict] = []
     urgentes: list[dict] = []
     proximas: list[dict] = []
@@ -105,6 +106,14 @@ def preparar_hoy(subtareas: list[dict], hoy: date) -> dict:
     urgentes = ordenar_grupo(urgentes, "urgente")
     proximas = ordenar_grupo(proximas, "proxima")
 
+    # La sobrecarga se calcula con las gestiones no completadas programadas
+    # para hoy. El límite pertenece al organizador autenticado.
+    horas_programadas_hoy = sum(
+        float(item.get("horas_estimadas") or 0)
+        for item in urgentes
+    )
+    exceso_horas = max(0, horas_programadas_hoy - horas_dia)
+
     return {
         "fecha": hoy.isoformat(),
         "resumen": {
@@ -112,6 +121,10 @@ def preparar_hoy(subtareas: list[dict], hoy: date) -> dict:
             "urgentes": len(urgentes),
             "proximas": len(proximas),
             "total": len(vencidas) + len(urgentes) + len(proximas),
+            "horas_programadas_hoy": horas_programadas_hoy,
+            "limite_horas_dia": horas_dia,
+            "sobrecarga": horas_programadas_hoy > horas_dia,
+            "exceso_horas": exceso_horas,
         },
         "vencidas": vencidas,
         "urgentes": urgentes,
@@ -152,7 +165,7 @@ def obtener_hoy(
         ids_eventos = [str(item["id"]) for item in eventos_usuario]
 
         if not ids_eventos:
-            return preparar_hoy([], hoy)
+            return preparar_hoy([], hoy, obtener_horas_dia(usuario_id))
 
         consulta = (
             supabase
@@ -166,14 +179,14 @@ def obtener_hoy(
             estado_filtrado = estado.strip()
 
             if normalizar_estado(estado_filtrado) in ESTADOS_COMPLETADOS:
-                return preparar_hoy([], hoy)
+                return preparar_hoy([], hoy, obtener_horas_dia(usuario_id))
 
             consulta = consulta.eq("estado", estado_filtrado)
 
         response = consulta.execute()
 
         subtareas = response.data or []
-        return preparar_hoy(subtareas, hoy)
+        return preparar_hoy(subtareas, hoy, obtener_horas_dia(usuario_id))
 
     except Exception as error:
         logger.exception("No fue posible construir la vista Hoy")
