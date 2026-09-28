@@ -17,3 +17,20 @@ Endpoints principales:
 - `POST /eventos`: crea un evento y devuelve `201` con el registro creado.
 
 Para Render se incluye [`render.yaml`](render.yaml). Las variables de Supabase se configuran como secretos del servicio, nunca en el frontend.
+
+### Endpoint `GET /hoy`
+
+Devuelve las subtareas no completadas agrupadas en `vencidas`, `urgentes` y `proximas`, ordenadas por prioridad temporal y menor esfuerzo como desempate.
+
+Admite filtros opcionales que se aplican directamente sobre Supabase:
+
+- `evento_id`: filtra por evento.
+- `estado`: filtra por estado de gestión.
+
+Ejemplos:
+
+- `GET /hoy?evento_id=<id>`
+- `GET /hoy?estado=Pendiente`
+- `GET /hoy?evento_id=<id>&estado=Pendiente`
+
+La estructura de respuesta se mantiene igual independientemente de los filtros. Las subtareas completadas siguen excluidas por la regla de negocio de la vista Hoy.
