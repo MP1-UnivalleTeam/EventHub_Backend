@@ -13,6 +13,7 @@ Endpoints principales:
 
 - `GET /health`: comprueba la conexión a Supabase.
 - `GET /eventos`: consulta registros persistidos.
+- `GET /hoy/`: devuelve las subtareas pendientes agrupadas en vencidas, urgentes del día y próximas.
 - `POST /eventos`: crea un evento y devuelve `201` con el registro creado.
 
 Para Render se incluye [`render.yaml`](render.yaml). Las variables de Supabase se configuran como secretos del servicio, nunca en el frontend.

@@ -95,7 +95,7 @@ class EventoActualizarParcial(BaseModel):
 class Subtarea(BaseModel):
     evento_id: str  # UUID en formato string
     titulo: str = Field(..., min_length=2, max_length=120)
-    dia_objetivo: Optional[date] = None
+    dia_objetivo: date
     horas_estimadas: float = Field(..., gt=0)
     estado: Optional[str] = Field(default="Pendiente")
     notas: Optional[str] = Field(default=None, max_length=300)
