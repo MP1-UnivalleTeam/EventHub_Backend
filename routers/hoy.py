@@ -3,8 +3,9 @@ from datetime import date
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from auth import get_current_user
 from database import supabase
 
 logger = logging.getLogger(__name__)
@@ -129,26 +130,45 @@ def obtener_hoy(
         default=None,
         description="Filtra las subtareas por estado de gestión.",
     ),
+    current_user: dict = Depends(get_current_user),
 ):
-    """Devuelve las subtareas pendientes agrupadas por prioridad temporal.
-
-    Los filtros opcionales se aplican directamente en Supabase antes de
-    recuperar los registros para evitar traer datos innecesarios.
-    """
+    """Devuelve las subtareas del organizador autenticado agrupadas por prioridad."""
     try:
+        usuario_id = current_user["id"]
         hoy = obtener_fecha_hoy()
+
+        eventos_query = (
+            supabase
+            .table("eventos")
+            .select("id")
+            .eq("usuario_id", usuario_id)
+        )
+
+        if evento_id:
+            eventos_query = eventos_query.eq("id", evento_id.strip())
+
+        eventos_response = eventos_query.execute()
+        eventos_usuario = eventos_response.data or []
+        ids_eventos = [str(item["id"]) for item in eventos_usuario]
+
+        if not ids_eventos:
+            return preparar_hoy([], hoy)
 
         consulta = (
             supabase
             .table("subtareas")
             .select("*")
+            .eq("usuario_id", usuario_id)
+            .in_("evento_id", ids_eventos)
         )
 
-        if evento_id:
-            consulta = consulta.eq("evento_id", evento_id.strip())
-
         if estado:
-            consulta = consulta.eq("estado", estado.strip())
+            estado_filtrado = estado.strip()
+
+            if normalizar_estado(estado_filtrado) in ESTADOS_COMPLETADOS:
+                return preparar_hoy([], hoy)
+
+            consulta = consulta.eq("estado", estado_filtrado)
 
         response = consulta.execute()
 

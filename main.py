@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
+from modelos import LoginRequest
 from routers import eventos, hoy, subtareas
 
 app = FastAPI(title="EventHub API", version="1.1.0", redirect_slashes=False)
@@ -36,6 +37,46 @@ app.add_middleware(
 app.include_router(eventos.router)
 app.include_router(subtareas.router)
 app.include_router(hoy.router)
+
+
+@app.post("/auth/login", tags=["Autenticación"])
+def login(credenciales: LoginRequest):
+    """Inicia sesión con Supabase Auth y devuelve el access token."""
+    try:
+        response = supabase.auth.sign_in_with_password(
+            {
+                "email": credenciales.email,
+                "password": credenciales.password,
+            }
+        )
+
+        session = response.session
+        user = response.user
+
+        if not session or not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Correo o contraseña incorrectos.",
+            )
+
+        return {
+            "access_token": session.access_token,
+            "refresh_token": session.refresh_token,
+            "token_type": "bearer",
+            "expires_in": session.expires_in,
+            "usuario": {
+                "id": str(user.id),
+                "email": user.email,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Correo o contraseña incorrectos.",
+        ) from error
 
 @app.get("/", tags=["Sistema"])
 def read_root():

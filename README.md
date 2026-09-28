@@ -34,3 +34,27 @@ Ejemplos:
 - `GET /hoy?evento_id=<id>&estado=Pendiente`
 
 La estructura de respuesta se mantiene igual independientemente de los filtros. Las subtareas completadas siguen excluidas por la regla de negocio de la vista Hoy.
+
+
+## Autenticación y aislamiento por organizador
+
+El endpoint `POST /auth/login` autentica al organizador mediante Supabase Auth.
+
+Ejemplo:
+
+```json
+{
+  "email": "organizador@ejemplo.com",
+  "password": "tu_clave"
+}
+```
+
+La respuesta contiene un `access_token`. Para las rutas privadas se debe enviar:
+
+```text
+Authorization: Bearer <access_token>
+```
+
+Las consultas de eventos, subtareas y la vista `/hoy` se filtran por el `usuario_id` obtenido de la sesión. El cliente no puede escoger el `usuario_id` del registro que crea.
+
+La base de datos debe tener `usuario_id uuid` en `eventos` y `subtareas`. Revisa `supabase/schema.sql` para la migración.
