@@ -58,3 +58,23 @@ Authorization: Bearer <access_token>
 Las consultas de eventos, subtareas y la vista `/hoy` se filtran por el `usuario_id` obtenido de la sesión. El cliente no puede escoger el `usuario_id` del registro que crea.
 
 La base de datos debe tener `usuario_id uuid` en `eventos` y `subtareas`. Revisa `supabase/schema.sql` para la migración.
+
+## Configuración de horas por día
+
+La configuración del límite diario es privada por organizador y requiere autenticación.
+
+- `GET /usuario/configuracion`: devuelve el límite del organizador autenticado.
+- `PUT /usuario/configuracion`: actualiza el límite.
+
+Body:
+
+```json
+{
+  "horas_dia": 8
+}
+```
+
+`horas_dia` debe ser un número entero entre `1` y `16`. Si el organizador todavía no tiene una configuración guardada, el valor devuelto es `6`.
+
+La vista `GET /hoy` utiliza esta configuración para calcular la sobrecarga de las gestiones no completadas programadas para el día actual. En `resumen` devuelve `horas_programadas_hoy`, `limite_horas_dia`, `sobrecarga` y `exceso_horas`.
+

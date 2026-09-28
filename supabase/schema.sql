@@ -27,3 +27,15 @@ create index if not exists subtareas_evento_id_idx
 -- Cuando todos los registros tengan propietario:
 -- alter table public.eventos alter column usuario_id set not null;
 -- alter table public.subtareas alter column usuario_id set not null;
+
+
+-- Configuración privada del organizador.
+-- Un registro por usuario autenticado. El límite por defecto es 6 horas/día.
+create table if not exists public.usuario_configuracion (
+  usuario_id uuid primary key references auth.users(id) on delete cascade,
+  horas_dia integer not null default 6
+    check (horas_dia between 1 and 16)
+);
+
+create index if not exists usuario_configuracion_usuario_id_idx
+  on public.usuario_configuracion (usuario_id);
