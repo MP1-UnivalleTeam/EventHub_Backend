@@ -3,7 +3,7 @@ from datetime import date
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from database import supabase
 
@@ -120,17 +120,37 @@ def preparar_hoy(subtareas: list[dict], hoy: date) -> dict:
 
 @router.get("")
 @router.get("/")
-def obtener_hoy():
-    """Devuelve las subtareas pendientes agrupadas por prioridad temporal."""
+def obtener_hoy(
+    evento_id: str | None = Query(
+        default=None,
+        description="Filtra las subtareas por el ID del evento.",
+    ),
+    estado: str | None = Query(
+        default=None,
+        description="Filtra las subtareas por estado de gestión.",
+    ),
+):
+    """Devuelve las subtareas pendientes agrupadas por prioridad temporal.
+
+    Los filtros opcionales se aplican directamente en Supabase antes de
+    recuperar los registros para evitar traer datos innecesarios.
+    """
     try:
         hoy = obtener_fecha_hoy()
 
-        response = (
+        consulta = (
             supabase
             .table("subtareas")
             .select("*")
-            .execute()
         )
+
+        if evento_id:
+            consulta = consulta.eq("evento_id", evento_id.strip())
+
+        if estado:
+            consulta = consulta.eq("estado", estado.strip())
+
+        response = consulta.execute()
 
         subtareas = response.data or []
         return preparar_hoy(subtareas, hoy)
