@@ -8,7 +8,7 @@ class Evento(BaseModel):
     titulo: str = Field(..., min_length=3, max_length=120)
     descripcion: Optional[str] = Field(default=None, max_length=500)
     fecha: date
-    horas: float = Field(..., gt=0)
+    horas: float = Field(..., gt=0, le=24)
     usuario_responsable: str = Field(..., min_length=1, max_length=150)
 
     @field_validator("titulo")
@@ -51,7 +51,8 @@ class EventoActualizarParcial(BaseModel):
 
     horas: Optional[float] = Field(
         default=None,
-        gt=0
+        gt=0,
+        le=24
     )
 
     usuario_responsable: Optional[str] = Field(
@@ -134,3 +135,11 @@ class SubtareaActualizarParcial(BaseModel):
         default=None,
         max_length=300
     )
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=1)
+
+    @field_validator("email")
+    def limpiar_email(cls, value: str) -> str:
+        return value.strip().lower()
