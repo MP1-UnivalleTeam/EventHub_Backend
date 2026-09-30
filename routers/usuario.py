@@ -90,3 +90,22 @@ def actualizar_configuracion(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"No fue posible guardar la configuración del usuario: {str(error)}",
         ) from error
+
+def obtener_horas_dia(usuario_id: str) -> int:
+    try:
+        response = (
+            supabase
+            .table("usuario_configuracion")
+            .select("horas_dia")
+            .eq("usuario_id", usuario_id)
+            .maybe_single()
+            .execute()
+        )
+
+        if not response.data:
+            return 6
+
+        return response.data["horas_dia"]
+
+    except Exception:
+        return 6
