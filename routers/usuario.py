@@ -1,6 +1,5 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, status
+import logging
 
 from auth import get_current_user
 from database import supabase
