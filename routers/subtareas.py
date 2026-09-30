@@ -69,7 +69,12 @@ def crear_subtarea(
         usuario_id = current_user["id"]
         verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
 
-        datos = subtarea.model_dump(exclude_none=True)
+        datos = subtarea.model_dump(
+                mode="json",
+                exclude_none=True
+            )
+
+
         # Nunca se acepta usuario_id desde el frontend.
         datos["usuario_id"] = usuario_id
 
@@ -108,7 +113,10 @@ def actualizar_subtarea(
         usuario_id = current_user["id"]
         verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
 
-        datos = subtarea.model_dump(exclude_none=True)
+        datos = subtarea.model_dump(
+                mode="json",
+                exclude_none=True
+            )
 
         response = (
             supabase
@@ -145,7 +153,10 @@ def actualizar_subtarea_parcial(
 ):
     try:
         usuario_id = current_user["id"]
-        datos = subtarea.model_dump(exclude_none=True)
+        datos = subtarea.model_dump(
+            mode="json",
+            exclude_none=True
+        )
 
         if "evento_id" in datos:
             verificar_evento_del_usuario(datos["evento_id"], usuario_id)
