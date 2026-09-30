@@ -20,14 +20,13 @@ def obtener_horas_dia(usuario_id: str) -> int:
         .table("usuario_configuracion")
         .select("horas_dia")
         .eq("usuario_id", usuario_id)
-        .maybe_single()
         .execute()
     )
 
     if not response.data:
         return HORAS_DIA_POR_DEFECTO
 
-    return int(response.data["horas_dia"])
+    return int(response.data[0]["horas_dia"])
 
 
 @router.get(
