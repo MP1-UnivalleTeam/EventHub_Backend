@@ -67,12 +67,21 @@ def crear_subtarea(
 ):
     try:
         usuario_id = current_user["id"]
-        verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
 
-        datos = subtarea.model_dump(exclude_none=True)
-        datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
+        verificar_evento_del_usuario(
+            subtarea.evento_id,
+            usuario_id
+        )
 
-        datos["usuario_id"] = usuario_id
+        datos = {
+            "evento_id": subtarea.evento_id,
+            "titulo": subtarea.titulo,
+            "dia_objetivo": subtarea.dia_objetivo.isoformat(),
+            "horas_estimadas": subtarea.horas_estimadas,
+            "estado": subtarea.estado,
+            "notas": subtarea.notas,
+            "usuario_id": usuario_id,
+        }
 
         response = (
             supabase
