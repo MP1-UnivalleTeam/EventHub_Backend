@@ -69,13 +69,9 @@ def crear_subtarea(
         usuario_id = current_user["id"]
         verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
 
-        datos = subtarea.model_dump(
-                mode="json",
-                exclude_none=True
-            )
+        datos = subtarea.model_dump(exclude_none=True)
+        datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
 
-
-        # Nunca se acepta usuario_id desde el frontend.
         datos["usuario_id"] = usuario_id
 
         response = (
@@ -95,6 +91,7 @@ def crear_subtarea(
 
     except HTTPException:
         raise
+
     except Exception as error:
         logger.exception("Error real al crear subtarea")
         raise HTTPException(
@@ -113,10 +110,8 @@ def actualizar_subtarea(
         usuario_id = current_user["id"]
         verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
 
-        datos = subtarea.model_dump(
-                mode="json",
-                exclude_none=True
-            )
+        datos = subtarea.model_dump(exclude_none=True)
+        datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
 
         response = (
             supabase
@@ -153,10 +148,10 @@ def actualizar_subtarea_parcial(
 ):
     try:
         usuario_id = current_user["id"]
-        datos = subtarea.model_dump(
-            mode="json",
-            exclude_none=True
-        )
+        datos = subtarea.model_dump(exclude_none=True)
+
+        if "dia_objetivo" in datos and subtarea.dia_objetivo is not None:
+            datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
 
         if "evento_id" in datos:
             verificar_evento_del_usuario(datos["evento_id"], usuario_id)
