@@ -137,12 +137,33 @@ class SubtareaActualizarParcial(BaseModel):
     )
 
 class RegistroRequest(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=100)
+    apellido: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., min_length=3, max_length=254)
+    telefono: str = Field(..., min_length=7, max_length=20)
     password: str = Field(..., min_length=6, max_length=72)
+
+    @field_validator("nombre", "apellido")
+    def validar_nombre_apellido(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("El nombre y apellido son requeridos.")
+
+        return value
 
     @field_validator("email")
     def limpiar_email(cls, value: str) -> str:
         return value.strip().lower()
+
+    @field_validator("telefono")
+    def limpiar_telefono(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("El número de teléfono es requerido.")
+
+        return value
 
 
 class LoginRequest(BaseModel):

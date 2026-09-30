@@ -39,3 +39,48 @@ create table if not exists public.usuario_configuracion (
 
 create index if not exists usuario_configuracion_usuario_id_idx
   on public.usuario_configuracion (usuario_id);
+
+
+-- Perfil público de los usuarios de EventHub.
+-- El usuario_id corresponde al UUID generado por Supabase Auth.
+
+create table if not exists public.usuarios (
+  usuario_id uuid primary key
+    references auth.users(id)
+    on delete cascade,
+
+  nombre varchar(100) not null,
+  apellido varchar(100) not null,
+  email varchar(254) not null,
+  telefono varchar(20) not null,
+
+  creado_en date not null default current_date
+);
+
+create index if not exists usuarios_email_idx
+  on public.usuarios (email);
+
+-- Seguridad: cada usuario puede consultar y modificar únicamente
+-- su propio perfil.
+
+alter table public.usuarios enable row level security;
+
+drop policy if exists "usuarios_select_own" on public.usuarios;
+drop policy if exists "usuarios_insert_own" on public.usuarios;
+drop policy if exists "usuarios_update_own" on public.usuarios;
+
+create policy "usuarios_select_own"
+on public.usuarios
+for select
+using (auth.uid() = usuario_id);
+
+create policy "usuarios_insert_own"
+on public.usuarios
+for insert
+with check (auth.uid() = usuario_id);
+
+create policy "usuarios_update_own"
+on public.usuarios
+for update
+using (auth.uid() = usuario_id)
+with check (auth.uid() = usuario_id);

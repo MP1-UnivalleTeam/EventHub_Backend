@@ -40,10 +40,19 @@ app.include_router(hoy.router)
 app.include_router(usuario.router)
 
 
-@app.post("/auth/registro", status_code=status.HTTP_201_CREATED, tags=["Autenticación"])
+@app.post(
+    "/auth/registro",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Autenticación"]
+)
 def registro(datos: RegistroRequest):
-    """Crea un nuevo usuario en Supabase Auth."""
+    """
+    Registra un nuevo usuario en Supabase Auth y crea
+    su perfil en public.usuarios.
+    """
+
     try:
+        # 1. Crear usuario en Supabase Auth
         response = supabase.auth.admin.create_user(
             {
                 "email": datos.email,
@@ -60,20 +69,57 @@ def registro(datos: RegistroRequest):
                 detail="No fue posible crear el usuario.",
             )
 
+        usuario_id = str(user.id)
+
+        # 2. Crear perfil público asociado al UUID de Auth
+        perfil = {
+            "usuario_id": usuario_id,
+            "nombre": datos.nombre,
+            "apellido": datos.apellido,
+            "email": datos.email,
+            "telefono": datos.telefono,
+        }
+
+        try:
+            supabase.table("usuarios").insert(perfil).execute()
+
+        except Exception as error_perfil:
+            # Si falla la creación del perfil,
+            # elimina también el usuario de Auth para evitar
+            # dejar una cuenta incompleta.
+            try:
+                supabase.auth.admin.delete_user(usuario_id)
+            except Exception:
+                pass
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="El usuario fue creado, pero no fue posible crear su perfil.",
+            ) from error_perfil
+
+        # 3. Respuesta
         return {
             "message": "Usuario registrado correctamente.",
             "usuario": {
-                "id": str(user.id),
-                "email": user.email,
+                "id": usuario_id,
+                "nombre": datos.nombre,
+                "apellido": datos.apellido,
+                "email": datos.email,
+                "telefono": datos.telefono,
             },
         }
 
     except HTTPException:
         raise
+
     except Exception as error:
         mensaje = str(error).lower()
 
-        if "already registered" in mensaje or "already exists" in mensaje or "duplicate" in mensaje:
+        if (
+            "already registered" in mensaje
+            or "already exists" in mensaje
+            or "duplicate" in mensaje
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="El correo electrónico ya está registrado.",
@@ -81,7 +127,10 @@ def registro(datos: RegistroRequest):
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No fue posible registrar el usuario. Verifica los datos enviados.",
+            detail=(
+                "No fue posible registrar el usuario. "
+                "Verifica los datos enviados."
+            ),
         ) from error
 
 
