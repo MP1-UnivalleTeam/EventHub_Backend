@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
-from modelos import LoginRequest
+from modelos import LoginRequest, RegistroRequest
 from routers import eventos, hoy, subtareas, usuario
 
 app = FastAPI(title="EventHub API", version="1.1.0", redirect_slashes=False)
@@ -38,6 +38,51 @@ app.include_router(eventos.router)
 app.include_router(subtareas.router)
 app.include_router(hoy.router)
 app.include_router(usuario.router)
+
+
+@app.post("/auth/registro", status_code=status.HTTP_201_CREATED, tags=["Autenticación"])
+def registro(datos: RegistroRequest):
+    """Crea un nuevo usuario en Supabase Auth."""
+    try:
+        response = supabase.auth.admin.create_user(
+            {
+                "email": datos.email,
+                "password": datos.password,
+                "email_confirm": True,
+            }
+        )
+
+        user = response.user
+
+        if not user or not user.id:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No fue posible crear el usuario.",
+            )
+
+        return {
+            "message": "Usuario registrado correctamente.",
+            "usuario": {
+                "id": str(user.id),
+                "email": user.email,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        mensaje = str(error).lower()
+
+        if "already registered" in mensaje or "already exists" in mensaje or "duplicate" in mensaje:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El correo electrónico ya está registrado.",
+            ) from error
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fue posible registrar el usuario. Verifica los datos enviados.",
+        ) from error
 
 
 @app.post("/auth/login", tags=["Autenticación"])

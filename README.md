@@ -38,6 +38,19 @@ La estructura de respuesta se mantiene igual independientemente de los filtros. 
 
 ## Autenticación y aislamiento por organizador
 
+El endpoint `POST /auth/registro` permite crear un nuevo organizador desde cero mediante Supabase Auth.
+
+Ejemplo:
+
+```json
+{
+  "email": "nuevo@ejemplo.com",
+  "password": "clave123"
+}
+```
+
+La contraseña debe tener entre 6 y 72 caracteres. El backend crea el usuario y confirma el correo para que pueda iniciar sesión inmediatamente. Si el correo ya existe, el endpoint responde `409`.
+
 El endpoint `POST /auth/login` autentica al organizador mediante Supabase Auth.
 
 Ejemplo:
