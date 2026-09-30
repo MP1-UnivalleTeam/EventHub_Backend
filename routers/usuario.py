@@ -74,6 +74,7 @@ def actualizar_configuracion(
             supabase
             .table("usuario_configuracion")
             .upsert(datos, on_conflict="usuario_id")
+            .select("usuario_id, horas_dia")
             .execute()
         )
 
