@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_current_user
 from database import supabase
-from modelos import ConfiguracionUsuario, ConfiguracionUsuarioResponse
+from modelos import ConfiguracionUsuarioRequest, ConfiguracionUsuarioResponse
 
 
 router = APIRouter(
@@ -52,7 +52,7 @@ def obtener_configuracion(
     response_model=ConfiguracionUsuarioResponse,
 )
 def actualizar_configuracion(
-    configuracion: ConfiguracionUsuario,
+    configuracion: ConfiguracionUsuarioRequest,
     current_user: dict = Depends(get_current_user),
 ):
     usuario_id = current_user["id"]
