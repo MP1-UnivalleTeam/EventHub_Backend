@@ -112,25 +112,25 @@ def registro(datos: RegistroRequest):
     except HTTPException:
         raise
 
-    except Exception as error:
-    print(f"ERROR REGISTRO: {repr(error)}")
+        except Exception as error:
+            print(f"ERROR REGISTRO: {repr(error)}")
 
-    mensaje = str(error).lower()
+            mensaje = str(error).lower()
 
-    if (
-        "already registered" in mensaje
-        or "already exists" in mensaje
-        or "duplicate" in mensaje
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="El correo electrónico ya está registrado.",
-        ) from error
+            if (
+                "already registered" in mensaje
+                or "already exists" in mensaje
+                or "duplicate" in mensaje
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="El correo electrónico ya está registrado.",
+                ) from error
 
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=str(error),
-    ) from error
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
 
 
 @app.post("/auth/login", tags=["Autenticación"])
