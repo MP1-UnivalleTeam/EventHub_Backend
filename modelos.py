@@ -136,6 +136,11 @@ class SubtareaActualizarParcial(BaseModel):
         max_length=300
     )
 
+    motivo_posposicion: Optional[str] = Field(
+        default=None,
+        max_length=500
+    )
+
 class RegistroRequest(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=100)
     apellido: str = Field(..., min_length=2, max_length=100)
