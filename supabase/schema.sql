@@ -84,3 +84,6 @@ on public.usuarios
 for update
 using (auth.uid() = usuario_id)
 with check (auth.uid() = usuario_id);
+
+alter table public.subtareas
+  add column if not exists motivo_posposicion varchar(500);
