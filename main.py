@@ -184,7 +184,21 @@ def healthcheck():
         supabase.table("eventos").select("id").limit(1).execute()
         return {"status": "ok", "database": "connected"}
     except Exception as error:
+    print(f"ERROR REAL EN REGISTRO: {repr(error)}")
+
+    mensaje = str(error).lower()
+
+    if (
+        "already registered" in mensaje
+        or "already exists" in mensaje
+        or "duplicate" in mensaje
+    ):
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No hay conexión disponible con la base de datos.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El correo electrónico ya está registrado.",
         ) from error
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Error al registrar usuario: {str(error)}",
+    ) from error
