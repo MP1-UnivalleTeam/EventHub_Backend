@@ -173,14 +173,6 @@ def registro(datos: RegistroRequest):
                     detail="No fue posible crear la configuración inicial del usuario.",
                 ) from error_configuracion
 
-            configuracion = {
-                "usuario_id": usuario_id,
-                "horas_dia": 6,
-            }
-
-            supabase.table("usuario_configuracion").insert(
-                configuracion
-            ).execute()
 
         except Exception as error_perfil:
 
