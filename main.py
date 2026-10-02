@@ -125,6 +125,15 @@ def registro(datos: RegistroRequest):
         try:
             supabase.table("usuarios").insert(perfil).execute()
 
+            configuracion = {
+                "usuario_id": usuario_id,
+                "horas_dia": 6,
+            }
+
+            supabase.table("usuario_configuracion").insert(
+                configuracion
+            ).execute()
+
         except Exception as error_perfil:
 
             print(

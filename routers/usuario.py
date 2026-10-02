@@ -15,6 +15,10 @@ router = APIRouter(
     "/configuracion",
     response_model=ConfiguracionUsuarioResponse,
 )
+@router.get(
+    "/configuracion",
+    response_model=ConfiguracionUsuarioResponse,
+)
 def obtener_configuracion(
     current_user: dict = Depends(get_current_user),
 ):
@@ -30,15 +34,25 @@ def obtener_configuracion(
             .execute()
         )
 
-        # Si el usuario todavía no tiene configuración,
-        # se utiliza el valor predeterminado de 6 horas.
-        if not response.data:
-            return {
-                "usuario_id": usuario_id,
-                "horas_dia": 6,
-            }
+        if response.data:
+            return response.data
 
-        return response.data
+        configuracion = {
+            "usuario_id": usuario_id,
+            "horas_dia": 6,
+        }
+
+        creada = (
+            supabase
+            .table("usuario_configuracion")
+            .insert(configuracion)
+            .execute()
+        )
+
+        if creada.data:
+            return creada.data[0]
+
+        return configuracion
 
     except Exception as error:
         raise HTTPException(
