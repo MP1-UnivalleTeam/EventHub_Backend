@@ -2,7 +2,6 @@ import os
 
 from dotenv import load_dotenv
 from supabase import Client, create_client
-from supabase.lib.client_options import ClientOptions
 
 
 load_dotenv()
@@ -22,15 +21,10 @@ def crear_cliente() -> Client:
     return create_client(
         SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY,
-        options=ClientOptions(
-            auto_refresh_token=False,
-            persist_session=False,
-        ),
     )
 
 
-# Cliente exclusivo para operaciones de base de datos.
-# Nunca debe utilizarse para iniciar sesión.
+# Cliente para operaciones de base de datos.
 supabase: Client = crear_cliente()
 
 
