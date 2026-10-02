@@ -316,3 +316,37 @@ def healthcheck():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="No hay conexión disponible con la base de datos.",
         ) from error
+
+@app.get("/debug/supabase-auth", tags=["Sistema"])
+def debug_supabase_auth():
+    try:
+        response = supabase.auth.admin.list_users()
+
+        usuarios = getattr(response, "users", [])
+
+        return {
+            "conexion": "ok",
+            "puede_listar_usuarios": True,
+            "cantidad_usuarios": len(usuarios),
+            "supabase_url": os.getenv("SUPABASE_URL"),
+            "service_key_configurada": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
+            "service_key_inicio": (
+                os.getenv("SUPABASE_SERVICE_ROLE_KEY")[:15]
+                if os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                else None
+            )
+        }
+
+    except Exception as error:
+        return {
+            "conexion": "error",
+            "puede_listar_usuarios": False,
+            "supabase_url": os.getenv("SUPABASE_URL"),
+            "service_key_configurada": bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
+            "service_key_inicio": (
+                os.getenv("SUPABASE_SERVICE_ROLE_KEY")[:15]
+                if os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+                else None
+            ),
+            "error": str(error)
+        }
