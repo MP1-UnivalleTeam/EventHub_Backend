@@ -1,14 +1,14 @@
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictInt, field_validator
 
 
 class Evento(BaseModel):
     titulo: str = Field(..., min_length=3, max_length=120)
     descripcion: Optional[str] = Field(default=None, max_length=500)
     fecha: date
-    horas: float = Field(..., gt=0)
+    horas: float = Field(..., gt=0, le=24)
     usuario_responsable: str = Field(..., min_length=1, max_length=150)
 
     @field_validator("titulo")
@@ -51,7 +51,8 @@ class EventoActualizarParcial(BaseModel):
 
     horas: Optional[float] = Field(
         default=None,
-        gt=0
+        gt=0,
+        le=24
     )
 
     usuario_responsable: Optional[str] = Field(
@@ -95,7 +96,7 @@ class EventoActualizarParcial(BaseModel):
 class Subtarea(BaseModel):
     evento_id: str  # UUID en formato string
     titulo: str = Field(..., min_length=2, max_length=120)
-    dia_objetivo: Optional[date] = None
+    dia_objetivo: date
     horas_estimadas: float = Field(..., gt=0)
     estado: Optional[str] = Field(default="Pendiente")
     notas: Optional[str] = Field(default=None, max_length=300)
@@ -134,3 +135,61 @@ class SubtareaActualizarParcial(BaseModel):
         default=None,
         max_length=300
     )
+
+    motivo_posposicion: Optional[str] = Field(
+        default=None,
+        max_length=500
+    )
+
+class RegistroRequest(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=100)
+    apellido: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., min_length=3, max_length=254)
+    telefono: str = Field(..., min_length=7, max_length=20)
+    password: str = Field(..., min_length=6, max_length=72)
+
+    @field_validator("nombre", "apellido")
+    def validar_nombre_apellido(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("El nombre y apellido son requeridos.")
+
+        return value
+
+    @field_validator("email")
+    def limpiar_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("telefono")
+    def limpiar_telefono(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("El número de teléfono es requerido.")
+
+        return value
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=1)
+
+    @field_validator("email")
+    def limpiar_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+class ConfiguracionUsuarioRequest(BaseModel):
+    horas_dia: StrictInt = Field(..., ge=1, le=16)
+
+    @field_validator("horas_dia")
+    def validar_horas_dia(cls, value: int) -> int:
+        if isinstance(value, bool):
+            raise ValueError("Las horas por día deben ser un número entero entre 1 y 16.")
+        return value
+
+
+class ConfiguracionUsuarioResponse(BaseModel):
+    usuario_id: str
+    horas_dia: int
+
