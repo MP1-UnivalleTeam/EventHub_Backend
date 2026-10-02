@@ -30,31 +30,25 @@ def obtener_configuracion(
             .table("usuario_configuracion")
             .select("usuario_id, horas_dia")
             .eq("usuario_id", usuario_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
 
-        if response.data:
-            return response.data
+        if not response.data:
+            return {
+                "usuario_id": usuario_id,
+                "horas_dia": 6,
+            }
 
-        configuracion = {
-            "usuario_id": usuario_id,
-            "horas_dia": 6,
-        }
-
-        creada = (
-            supabase
-            .table("usuario_configuracion")
-            .insert(configuracion)
-            .execute()
-        )
-
-        if creada.data:
-            return creada.data[0]
-
-        return configuracion
+        return response.data[0]
 
     except Exception as error:
+        print(
+            f"ERROR OBTENIENDO CONFIGURACION: "
+            f"usuario_id={usuario_id} "
+            f"error={repr(error)}"
+        )
+
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="No fue posible obtener la configuración del usuario.",

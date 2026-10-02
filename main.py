@@ -125,6 +125,54 @@ def registro(datos: RegistroRequest):
         try:
             supabase.table("usuarios").insert(perfil).execute()
 
+            # ----------------------------------------------------
+            # 3. Crear configuración inicial del usuario
+            # ----------------------------------------------------
+
+            configuracion_inicial = {
+                "usuario_id": usuario_id,
+                "horas_dia": 6,
+            }
+
+            try:
+                supabase.table("usuario_configuracion").upsert(
+                    configuracion_inicial,
+                    on_conflict="usuario_id",
+                ).execute()
+
+            except Exception as error_configuracion:
+
+                print(
+                    f"ERROR CREANDO CONFIGURACION DEL USUARIO: "
+                    f"{repr(error_configuracion)}"
+                )
+
+                # Eliminar perfil
+                try:
+                    supabase.table("usuarios").delete().eq(
+                        "usuario_id",
+                        usuario_id
+                    ).execute()
+                except Exception as error_perfil_delete:
+                    print(
+                        f"ERROR ELIMINANDO PERFIL: "
+                        f"{repr(error_perfil_delete)}"
+                    )
+
+                # Eliminar usuario de Auth
+                try:
+                    supabase_admin.auth.admin.delete_user(usuario_id)
+                except Exception as error_delete:
+                    print(
+                        f"ERROR ELIMINANDO USUARIO DE AUTH: "
+                        f"{repr(error_delete)}"
+                    )
+
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No fue posible crear la configuración inicial del usuario.",
+                ) from error_configuracion
+
             configuracion = {
                 "usuario_id": usuario_id,
                 "horas_dia": 6,
@@ -160,7 +208,7 @@ def registro(datos: RegistroRequest):
             ) from error_perfil
 
         # ----------------------------------------------------
-        # 3. Respuesta exitosa
+        # 4. Respuesta exitosa
         # ----------------------------------------------------
 
         return {
