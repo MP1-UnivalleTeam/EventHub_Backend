@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from database import supabase
+from database import supabase_auth
 
 security = HTTPBearer(auto_error=False)
 
@@ -20,7 +20,7 @@ def get_current_user(
         )
 
     try:
-        response = supabase.auth.get_user(credentials.credentials)
+        response = supabase_auth.auth.get_user(credentials.credentials)
         user = response.user
 
         if not user or not user.id:
