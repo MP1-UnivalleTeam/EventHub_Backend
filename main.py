@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import supabase
+from database import supabase, supabase_admin
 from modelos import LoginRequest, RegistroRequest
 from routers import eventos, hoy, subtareas, usuario
 
@@ -92,7 +92,7 @@ def registro(datos: RegistroRequest):
         # 1. Crear usuario en Supabase Auth
         # ----------------------------------------------------
 
-        response = supabase.auth.admin.create_user(
+        response = supabase_admin.auth.admin.create_user(
             {
                 "email": datos.email,
                 "password": datos.password,
@@ -135,7 +135,7 @@ def registro(datos: RegistroRequest):
             # Si falla el perfil, eliminar el usuario de Auth
             # para evitar dejar una cuenta incompleta.
             try:
-                supabase.auth.admin.delete_user(usuario_id)
+                supabase_admin.auth.admin.delete_user(usuario_id)
             except Exception as error_delete:
                 print(
                     f"ERROR ELIMINANDO USUARIO DE AUTH: "
