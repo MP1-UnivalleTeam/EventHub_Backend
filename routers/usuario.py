@@ -2,7 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_current_user
 from database import supabase
-from modelos import ConfiguracionUsuarioRequest, ConfiguracionUsuarioResponse
+from modelos import (
+    ConfiguracionUsuarioRequest,
+    ConfiguracionUsuarioResponse,
+    MensajeErrorResponse,
+)
+from servicios import (
+    LIMITE_HORAS_DIA_POR_DEFECTO,
+    normalizar_horas_dia,
+    obtener_horas_dia,
+)
 
 
 router = APIRouter(
@@ -14,10 +23,16 @@ router = APIRouter(
 @router.get(
     "/configuracion",
     response_model=ConfiguracionUsuarioResponse,
-)
-@router.get(
-    "/configuracion",
-    response_model=ConfiguracionUsuarioResponse,
+    responses={
+        401: {
+            "model": MensajeErrorResponse,
+            "description": "Falta el token de autenticación.",
+        },
+        502: {
+            "model": MensajeErrorResponse,
+            "description": "Error de la base de datos.",
+        },
+    },
 )
 def obtener_configuracion(
     current_user: dict = Depends(get_current_user),
@@ -35,12 +50,19 @@ def obtener_configuracion(
         )
 
         if not response.data:
+            # Sin configuración persistida se aplica el valor por defecto
+            # de negocio (6 horas/día) solo para este organizador.
             return {
                 "usuario_id": usuario_id,
-                "horas_dia": 6,
+                "horas_dia": LIMITE_HORAS_DIA_POR_DEFECTO,
             }
 
-        return response.data[0]
+        return {
+            "usuario_id": usuario_id,
+            "horas_dia": normalizar_horas_dia(
+                response.data[0].get("horas_dia")
+            ),
+        }
 
     except Exception as error:
         print(
@@ -58,11 +80,25 @@ def obtener_configuracion(
 @router.put(
     "/configuracion",
     response_model=ConfiguracionUsuarioResponse,
+    responses={
+        401: {
+            "model": MensajeErrorResponse,
+            "description": "Falta el token de autenticación.",
+        },
+        # El 422 lo documenta FastAPI automáticamente con el esquema de
+        # validación: horas_dia es un entero entre 1 y 16.
+        502: {
+            "model": MensajeErrorResponse,
+            "description": "Error de la base de datos.",
+        },
+    },
 )
 def actualizar_configuracion(
     configuracion: ConfiguracionUsuarioRequest,
     current_user: dict = Depends(get_current_user),
 ):
+    # El PUT solo puede tocar la configuración del usuario autenticado:
+    # el `usuario_id` sale de la sesión, nunca del cuerpo.
     usuario_id = current_user["id"]
 
     datos = {
@@ -98,22 +134,3 @@ def actualizar_configuracion(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"No fue posible guardar la configuración del usuario: {str(error)}",
         ) from error
-
-def obtener_horas_dia(usuario_id: str) -> int:
-    try:
-        response = (
-            supabase
-            .table("usuario_configuracion")
-            .select("horas_dia")
-            .eq("usuario_id", usuario_id)
-            .maybe_single()
-            .execute()
-        )
-
-        if not response.data:
-            return 6
-
-        return response.data["horas_dia"]
-
-    except Exception:
-        return 6

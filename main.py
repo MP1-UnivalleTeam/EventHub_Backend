@@ -174,6 +174,18 @@ def registro(datos: RegistroRequest):
                 ) from error_configuracion
 
 
+        # Errores HTTP controlados
+        #
+        # Debe ir antes del manejador genérico del bloque del perfil:
+        # el 500 de "configuración inicial" se lanza dentro de ese
+        # bloque y, de lo contrario, se capturaba aquí y terminaba
+        # respondiendo el mensaje equivocado ("no fue posible crear su
+        # perfil") cuando en realidad era la configuración.
+        # --------------------------------------------------------
+
+        except HTTPException:
+            raise
+
         except Exception as error_perfil:
 
             print(
