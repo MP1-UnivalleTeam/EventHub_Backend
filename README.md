@@ -164,6 +164,6 @@ Los errores de validación (`422`) responden en el formato estándar de FastAPI 
 | Límite diario fuera de 1–16 | `El valor debe estar entre 1 y 16 horas diarias.` |
 | Fecha vacía o con formato inválido | `El campo <campo> es obligatorio.` / `La fecha no es válida. Usa el formato AAAA-MM-DD.` |
 | Horas ≤ 0 | `Las horas del evento deben ser mayores que 0.` / `Las horas estimadas de la gestión deben ser mayores que 0.` |
-| Título demasiado corto | `El título del evento debe tener al menos 3 caracteres.` / `El título de la gestión debe tener al menos 2 caracteres.` |
+| Título o nombre vacío | `El título del evento es obligatorio y no puede estar vacío.` / `El nombre de la subtarea es obligatorio y no puede estar vacío.` |
 | Fecha anterior a hoy al reprogramar | `La fecha seleccionada no es válida o es anterior al día de hoy.` |
 

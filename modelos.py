@@ -45,11 +45,11 @@ MENSAJE_RANGO_HORAS_DIA = (
 )
 
 MENSAJE_TITULO_EVENTO = (
-    "El título del evento no puede estar vacio"
+    "El título del evento es obligatorio y no puede estar vacío."
 )
 
 MENSAJE_TITULO_SUBTAREA = (
-    "El título de la gestión debe tener al menos 2 caracteres."
+    "El nombre de la subtarea es obligatorio y no puede estar vacío."
 )
 
 MENSAJE_RESPONSABLE = (
@@ -80,7 +80,7 @@ def _validar_fecha_texto(valor: Any, campo: str) -> Any:
 
 
 class Evento(BaseModel):
-    titulo: str = Field(..., min_length=3, max_length=120)
+    titulo: str = Field(..., max_length=120)
     descripcion: Optional[str] = Field(default=None, max_length=500)
     fecha: date
     horas: float = Field(..., gt=0, le=24)
@@ -93,7 +93,7 @@ class Evento(BaseModel):
 
         titulo = value.strip()
 
-        if len(titulo) < 3:
+        if not titulo:
             raise ValueError(MENSAJE_TITULO_EVENTO)
 
         return titulo
@@ -138,7 +138,6 @@ class Evento(BaseModel):
 class EventoActualizarParcial(BaseModel):
     titulo: Optional[str] = Field(
         default=None,
-        min_length=3,
         max_length=120
     )
 
@@ -213,7 +212,7 @@ class EventoActualizarParcial(BaseModel):
 
 class Subtarea(BaseModel):
     evento_id: str  # UUID en formato string
-    titulo: str = Field(..., min_length=2, max_length=120)
+    titulo: str = Field(..., max_length=120)
     dia_objetivo: date
     horas_estimadas: float = Field(..., gt=0)
     estado: Optional[str] = Field(default="Pendiente")
@@ -226,7 +225,7 @@ class Subtarea(BaseModel):
 
         titulo = value.strip()
 
-        if len(titulo) < 2:
+        if not titulo:
             raise ValueError(MENSAJE_TITULO_SUBTAREA)
 
         return titulo
@@ -253,7 +252,6 @@ class SubtareaActualizarParcial(BaseModel):
 
     titulo: Optional[str] = Field(
         default=None,
-        min_length=2,
         max_length=120
     )
 
@@ -285,7 +283,7 @@ class SubtareaActualizarParcial(BaseModel):
 
         titulo = value.strip()
 
-        if len(titulo) < 2:
+        if not titulo:
             raise ValueError(MENSAJE_TITULO_SUBTAREA)
 
         return titulo
