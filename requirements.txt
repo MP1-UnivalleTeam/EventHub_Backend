@@ -3,6 +3,4 @@ pydantic>=2.9,<3.0
 uvicorn[standard]>=0.27,<1.0
 supabase>=2.0,<3.0
 python-dotenv>=1.0,<2.0
-# Base de datos de zonas horarias (America/Bogota). En Linux el sistema la
-# provee; en Windows hay que instalarla para zoneinfo.
 tzdata>=2024.1
