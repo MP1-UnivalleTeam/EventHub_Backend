@@ -1,37 +1,32 @@
 import logging
 from datetime import date
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth import get_current_user
 from database import supabase
-from routers.usuario import obtener_horas_dia
+from modelos import MensajeErrorResponse
+
+# Estas utilidades viven ahora en `servicios.py` para que /hoy, la
+# reprogramación y la resolución de conflictos usen la misma regla de
+# sobrecarga. Se importan aquí para conservar los nombres públicos del
+# módulo (`routers.hoy.es_completada`, etc.).
+from servicios import (  # noqa: F401
+    ESTADOS_COMPLETADOS,
+    LIMITE_HORAS_DIA_POR_DEFECTO,
+    ZONA_HORARIA_EVENTHUB,
+    construir_resumen_sobrecarga,
+    es_completada,
+    normalizar_estado,
+    obtener_fecha_hoy,
+    obtener_horas_dia,
+    total_horas,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hoy", tags=["Hoy"])
-
-ZONA_HORARIA_EVENTHUB = ZoneInfo("America/Bogota")
-ESTADOS_COMPLETADOS = {"completada", "completado", "hecho", "hecha"}
-
-
-def obtener_fecha_hoy() -> date:
-    """Devuelve la fecha actual usando la zona horaria de Colombia."""
-    from datetime import datetime
-
-    return datetime.now(ZONA_HORARIA_EVENTHUB).date()
-
-
-def normalizar_estado(estado: Any) -> str:
-    if estado is None:
-        return ""
-    return str(estado).strip().lower()
-
-
-def es_completada(estado: Any) -> bool:
-    return normalizar_estado(estado) in ESTADOS_COMPLETADOS
 
 
 def clasificar_subtarea(subtarea: dict, hoy: date) -> str:
@@ -77,7 +72,11 @@ def ordenar_grupo(subtareas: list[dict], prioridad: str) -> list[dict]:
     )
 
 
-def preparar_hoy(subtareas: list[dict], hoy: date, horas_dia: int = 6) -> dict:
+def preparar_hoy(
+    subtareas: list[dict],
+    hoy: date,
+    horas_dia: int = LIMITE_HORAS_DIA_POR_DEFECTO,
+) -> dict:
     vencidas: list[dict] = []
     urgentes: list[dict] = []
     proximas: list[dict] = []
@@ -107,12 +106,14 @@ def preparar_hoy(subtareas: list[dict], hoy: date, horas_dia: int = 6) -> dict:
     proximas = ordenar_grupo(proximas, "proxima")
 
     # La sobrecarga se calcula con las gestiones no completadas programadas
-    # para hoy. El límite pertenece al organizador autenticado.
-    horas_programadas_hoy = sum(
-        float(item.get("horas_estimadas") or 0)
-        for item in urgentes
+    # para hoy. La regla (horas > límite) y el exceso salen de
+    # `servicios.construir_resumen_sobrecarga`, la misma fuente de verdad
+    # que usan la reprogramación y la resolución de conflictos.
+    resumen_sobrecarga = construir_resumen_sobrecarga(
+        dia=hoy.isoformat(),
+        horas_planificadas=total_horas(urgentes),
+        limite_horas_dia=horas_dia,
     )
-    exceso_horas = max(0, horas_programadas_hoy - horas_dia)
 
     return {
         "fecha": hoy.isoformat(),
@@ -121,10 +122,10 @@ def preparar_hoy(subtareas: list[dict], hoy: date, horas_dia: int = 6) -> dict:
             "urgentes": len(urgentes),
             "proximas": len(proximas),
             "total": len(vencidas) + len(urgentes) + len(proximas),
-            "horas_programadas_hoy": horas_programadas_hoy,
-            "limite_horas_dia": horas_dia,
-            "sobrecarga": horas_programadas_hoy > horas_dia,
-            "exceso_horas": exceso_horas,
+            "horas_programadas_hoy": resumen_sobrecarga["horas_planificadas"],
+            "limite_horas_dia": resumen_sobrecarga["limite_horas_dia"],
+            "sobrecarga": resumen_sobrecarga["conflicto"],
+            "exceso_horas": resumen_sobrecarga["exceso_horas"],
         },
         "vencidas": vencidas,
         "urgentes": urgentes,
@@ -132,8 +133,27 @@ def preparar_hoy(subtareas: list[dict], hoy: date, horas_dia: int = 6) -> dict:
     }
 
 
+def _escapar_patron(valor: str) -> str:
+    """Escapa los comodines de `ilike` en un valor de filtro."""
+    return (
+        valor
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 @router.get("")
-@router.get("/")
+@router.get("/", responses={
+    401: {
+        "model": MensajeErrorResponse,
+        "description": "Falta el token de autenticación.",
+    },
+    502: {
+        "model": MensajeErrorResponse,
+        "description": "No fue posible obtener las gestiones de hoy.",
+    },
+})
 def obtener_hoy(
     evento_id: str | None = Query(
         default=None,
@@ -181,7 +201,14 @@ def obtener_hoy(
             if normalizar_estado(estado_filtrado) in ESTADOS_COMPLETADOS:
                 return preparar_hoy([], hoy, obtener_horas_dia(usuario_id))
 
-            consulta = consulta.eq("estado", estado_filtrado)
+            # El estado se compara sin distinguir mayúsculas: las
+            # subtareas creadas por la API usan "Pendiente" y las que
+            # marca el organizador "pendiente"/"pospuesto". Con `eq` el
+            # filtro devolvía vacío y rompía US-05.
+            consulta = consulta.ilike(
+                "estado",
+                _escapar_patron(estado_filtrado),
+            )
 
         response = consulta.execute()
 
