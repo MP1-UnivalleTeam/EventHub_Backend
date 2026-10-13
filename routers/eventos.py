@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from auth import get_current_user
 from database import supabase
 from modelos import Evento, EventoActualizarParcial
+from servicios import contar_progreso_subtareas
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,13 @@ def obtener_evento(
     current_user: dict = Depends(get_current_user),
 ):
     try:
+        usuario_id = current_user["id"]
         response = (
             supabase
             .table("eventos")
             .select("*")
             .eq("id", evento_id.strip())
-            .eq("usuario_id", current_user["id"])
+            .eq("usuario_id", usuario_id)
             .execute()
         )
 
@@ -54,7 +56,20 @@ def obtener_evento(
                 detail="Evento no encontrado",
             )
 
-        return response.data[0]
+        evento = response.data[0]
+        subtareas_response = (
+            supabase
+            .table("subtareas")
+            .select("estado")
+            .eq("evento_id", evento["id"])
+            .eq("usuario_id", usuario_id)
+            .execute()
+        )
+
+        return {
+            **evento,
+            **contar_progreso_subtareas(subtareas_response.data or []),
+        }
 
     except HTTPException:
         raise
@@ -199,11 +214,16 @@ def eliminar_evento(
                 detail="Evento no encontrado.",
             )
 
-        # Solo se borran subtareas que pertenecen al mismo organizador.
-        supabase.table("subtareas").delete() \
-            .eq("evento_id", evento_id) \
-            .eq("usuario_id", usuario_id) \
+        # Se eliminan primero las subtareas propias incluso si la relación
+        # de la base de datos no tiene ON DELETE CASCADE.
+        (
+            supabase
+            .table("subtareas")
+            .delete()
+            .eq("evento_id", evento_id)
+            .eq("usuario_id", usuario_id)
             .execute()
+        )
 
         response = (
             supabase
@@ -211,13 +231,19 @@ def eliminar_evento(
             .delete()
             .eq("id", evento_id)
             .eq("usuario_id", usuario_id)
+            .select("id")
             .execute()
         )
 
         if not response.data:
+            logger.error(
+                "Supabase no confirmó el borrado del evento %s para %s",
+                evento_id,
+                usuario_id,
+            )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Evento no encontrado.",
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No fue posible confirmar la eliminación del evento.",
             )
 
         return None
