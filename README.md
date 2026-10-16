@@ -167,12 +167,13 @@ La vista `GET /hoy` utiliza esta configuración para calcular la sobrecarga de l
 {
   "dia_objetivo": "2026-05-10",
   "horas_estimadas": 2,
-  "motivo_posposicion": "Proveedor sin disponibilidad"
+  "notas": "Proveedor sin disponibilidad"
 }
 ```
 
 - `dia_objetivo` es obligatorio. Una fecha inválida o anterior al día de hoy responde `400` con el detalle `La fecha seleccionada no es válida o es anterior al día de hoy`.
 - `horas_estimadas` es opcional: si se omite se conserva la actual. Debe ser mayor que 0 y no superar 24.
+- `notas` es opcional: si se omite o llega vacía se conserva la nota guardada. Admite hasta 300 caracteres.
 - Solo se pueden reprogramar subtareas del organizador autenticado; una subtarea ajena responde `404`.
 
 Antes de guardar, el backend calcula las horas resultantes del día destino usando el límite configurado por el organizador. Si el total supera el límite **no se guarda nada** y se responde `409` con la información del conflicto:

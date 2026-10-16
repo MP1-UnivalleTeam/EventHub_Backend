@@ -307,6 +307,11 @@ def actualizar_subtarea(
         datos = subtarea.model_dump(exclude_none=True)
         datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
 
+        # Una nota enviada explícitamente se guarda aunque sea nula: es lo que
+        # permite limpiarla. Si el cliente no manda `notas`, no se toca.
+        if "notas" in subtarea.model_fields_set:
+            datos["notas"] = subtarea.notas
+
         # Si el cliente no envía `estado`, no se toca: el valor por
         # defecto del esquema ("Pendiente") pisaba el estado real de
         # ejecución de la gestión (hecha/pospuesta) en cada edición.
@@ -616,8 +621,10 @@ def reprogramar_subtarea(
         if reprogramacion.horas_estimadas is not None:
             cambios["horas_estimadas"] = reprogramacion.horas_estimadas
 
-        if reprogramacion.motivo_posposicion is not None:
-            cambios["motivo_posposicion"] = reprogramacion.motivo_posposicion
+        # La nota es opcional: si no viene con contenido se conserva la que
+        # ya tuviera guardada la subtarea.
+        if reprogramacion.notas is not None:
+            cambios["notas"] = reprogramacion.notas
 
         subtarea_actualizada = _actualizar_subtarea_del_usuario(
             subtarea_id,
@@ -711,8 +718,8 @@ def resolver_conflicto(
             "horas_estimadas": horas_a_float(resolucion.horas_estimadas),
         }
 
-        if resolucion.motivo_posposicion is not None:
-            cambios["motivo_posposicion"] = resolucion.motivo_posposicion
+        if resolucion.notas is not None:
+            cambios["notas"] = resolucion.notas
 
         registros = obtener_subtareas_del_usuario(usuario_id)
 
