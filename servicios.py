@@ -108,9 +108,9 @@ def sincronizar_estados_vencimiento(
             continue
 
         if fecha_objetivo < hoy:
-            estado_nuevo = "Vencido"
+            estado_nuevo = "vencido"
         elif estado_actual == "vencido":
-            estado_nuevo = "Pendiente"
+            estado_nuevo = "pendiente"
         else:
             continue
 
