@@ -1,4 +1,7 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from auth import get_current_user
 from database import supabase
@@ -10,7 +13,9 @@ from modelos import (
 from servicios import (
     LIMITE_HORAS_DIA_POR_DEFECTO,
     normalizar_horas_dia,
+    evaluar_dias_sobrecargados,
     obtener_horas_dia,
+    obtener_subtareas_del_usuario,
 )
 
 
@@ -18,6 +23,8 @@ router = APIRouter(
     prefix="/usuario",
     tags=["Usuario"],
 )
+
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -91,6 +98,12 @@ def obtener_configuracion(
             "model": MensajeErrorResponse,
             "description": "Error de la base de datos.",
         },
+        409: {
+            "description": (
+                "El nuevo límite excedería las horas planificadas en uno o "
+                "más días; la configuración no se guardó."
+            ),
+        },
     },
 )
 def actualizar_configuracion(
@@ -101,12 +114,33 @@ def actualizar_configuracion(
     # el `usuario_id` sale de la sesión, nunca del cuerpo.
     usuario_id = current_user["id"]
 
-    datos = {
-        "usuario_id": usuario_id,
-        "horas_dia": configuracion.horas_dia,
-    }
-
     try:
+        subtareas = obtener_subtareas_del_usuario(usuario_id)
+        dias_sobrecargados = evaluar_dias_sobrecargados(
+            subtareas,
+            configuracion.horas_dia,
+        )
+        if dias_sobrecargados:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "detail": (
+                        "El nuevo límite deja días con horas planificadas "
+                        "por encima de la capacidad."
+                    ),
+                    "dias_sobrecargados": dias_sobrecargados,
+                    "estrategias_disponibles": [
+                        "reprogramar",
+                        "reducir_horas",
+                    ],
+                },
+            )
+
+        datos = {
+            "usuario_id": usuario_id,
+            "horas_dia": configuracion.horas_dia,
+        }
+
         response = (
             supabase
             .table("usuario_configuracion")
@@ -128,9 +162,9 @@ def actualizar_configuracion(
 
     except HTTPException:
         raise
-
     except Exception as error:
+        logger.exception("No fue posible guardar la configuración del usuario")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"No fue posible guardar la configuración del usuario: {str(error)}",
+            detail="No fue posible guardar la configuración del usuario.",
         ) from error

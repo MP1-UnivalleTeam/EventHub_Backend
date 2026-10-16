@@ -42,7 +42,14 @@ LIMITE_HORAS_DIA_MAXIMO = 16
 # genere un falso positivo de sobrecarga.
 PRECISION_HORAS = 2
 
-ESTADOS_COMPLETADOS = {"completada", "completado", "hecho", "hecha"}
+ESTADOS_COMPLETADOS = {
+    "completada",
+    "completado",
+    "hecho",
+    "hecha",
+    "ejecutada",
+    "ejecutado",
+}
 
 
 # ============================================================
@@ -51,11 +58,6 @@ ESTADOS_COMPLETADOS = {"completada", "completado", "hecho", "hecha"}
 
 MENSAJE_FECHA_INVALIDA = (
     "La fecha seleccionada no es válida o es anterior al día de hoy."
-)
-
-MENSAJE_REDUCCION_INSUFICIENTE = (
-    "Las horas reducidas aún exceden el límite diario. "
-    "Reduce más horas o cambia la fecha."
 )
 
 MENSAJE_CONFLICTO_SOBRECARGA = (
@@ -90,6 +92,46 @@ def normalizar_estado(estado: Any) -> str:
 
 def es_completada(estado: Any) -> bool:
     return normalizar_estado(estado) in ESTADOS_COMPLETADOS
+
+
+def sincronizar_estados_vencimiento(
+    subtareas: list[dict],
+    usuario_id: str,
+    hoy: date,
+) -> list[dict]:
+    """Persiste el estado según la fecha para subtareas no completadas."""
+    for subtarea in subtareas:
+        fecha_objetivo = extraer_fecha(subtarea.get("dia_objetivo"))
+        estado_actual = normalizar_estado(subtarea.get("estado"))
+
+        if fecha_objetivo is None or es_completada(estado_actual):
+            continue
+
+        if fecha_objetivo < hoy:
+            estado_nuevo = "vencido"
+        elif estado_actual == "vencido":
+            estado_nuevo = "pendiente"
+        else:
+            continue
+
+        if subtarea.get("estado") == estado_nuevo:
+            continue
+
+        subtarea_id = subtarea.get("id")
+        if subtarea_id is None:
+            raise ValueError("No se puede actualizar una subtarea sin ID.")
+
+        (
+            supabase
+            .table("subtareas")
+            .update({"estado": estado_nuevo})
+            .eq("id", subtarea_id)
+            .eq("usuario_id", usuario_id)
+            .execute()
+        )
+        subtarea["estado"] = estado_nuevo
+
+    return subtareas
 
 
 def extraer_fecha(valor: Any) -> Optional[date]:
@@ -186,13 +228,11 @@ def obtener_horas_dia(usuario_id: str) -> int:
 
         return normalizar_horas_dia(response.data.get("horas_dia"))
 
-    except Exception as error:
-        logger.warning(
-            "No fue posible leer el limite diario de %s: %r",
-            usuario_id,
-            error,
+    except Exception:
+        logger.exception(
+            "No fue posible leer el limite diario de %s", usuario_id
         )
-        return LIMITE_HORAS_DIA_POR_DEFECTO
+        raise
 
 
 # ============================================================
@@ -252,6 +292,49 @@ def total_horas(subtareas: Iterable[dict]) -> float:
     """Suma las horas estimadas de una lista de subtareas."""
     total = sum(horas_a_float(item.get("horas_estimadas")) for item in subtareas)
     return round(total, PRECISION_HORAS)
+
+
+def contar_progreso_subtareas(subtareas: Iterable[dict]) -> dict[str, int]:
+    """Cuenta las subtareas terminadas; pospuestas no se consideran hechas."""
+    registros = list(subtareas)
+    return {
+        "total_subtareas": len(registros),
+        "total_ejecutadas": sum(
+            1 for item in registros if es_completada(item.get("estado"))
+        ),
+    }
+
+
+def evaluar_dias_sobrecargados(
+    subtareas: Iterable[dict],
+    limite_horas_dia: int,
+) -> list[dict]:
+    """Resume los días cuya carga excede el límite indicado."""
+    horas_por_dia: dict[date, float] = {}
+
+    for subtarea in subtareas:
+        if es_completada(subtarea.get("estado")):
+            continue
+
+        fecha = extraer_fecha(subtarea.get("dia_objetivo"))
+        if fecha is None or fecha < obtener_fecha_hoy():
+            continue
+
+        horas_por_dia[fecha] = (
+            horas_por_dia.get(fecha, 0.0)
+            + horas_a_float(subtarea.get("horas_estimadas"))
+        )
+
+    return [
+        construir_resumen_sobrecarga(
+            dia=fecha.isoformat(),
+            horas_planificadas=horas,
+            limite_horas_dia=limite_horas_dia,
+            horas_previas_dia=horas,
+        )
+        for fecha, horas in sorted(horas_por_dia.items())
+        if round(horas, PRECISION_HORAS) > limite_horas_dia
+    ]
 
 
 def calcular_horas_dia(

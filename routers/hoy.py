@@ -21,6 +21,7 @@ from servicios import (  # noqa: F401
     normalizar_estado,
     obtener_fecha_hoy,
     obtener_horas_dia,
+    sincronizar_estados_vencimiento,
     total_horas,
 )
 
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/hoy", tags=["Hoy"])
 def clasificar_subtarea(subtarea: dict, hoy: date) -> str:
     fecha_objetivo = date.fromisoformat(str(subtarea["dia_objetivo"])[:10])
 
-    if fecha_objetivo < hoy:
+    if normalizar_estado(subtarea.get("estado")) == "vencido":
         return "vencida"
     if fecha_objetivo == hoy:
         return "urgente"
@@ -133,16 +134,6 @@ def preparar_hoy(
     }
 
 
-def _escapar_patron(valor: str) -> str:
-    """Escapa los comodines de `ilike` en un valor de filtro."""
-    return (
-        valor
-        .replace("\\", "\\\\")
-        .replace("%", "\\%")
-        .replace("_", "\\_")
-    )
-
-
 @router.get("")
 @router.get("/", responses={
     401: {
@@ -195,24 +186,24 @@ def obtener_hoy(
             .in_("evento_id", ids_eventos)
         )
 
-        if estado:
-            estado_filtrado = estado.strip()
-
-            if normalizar_estado(estado_filtrado) in ESTADOS_COMPLETADOS:
-                return preparar_hoy([], hoy, obtener_horas_dia(usuario_id))
-
-            # El estado se compara sin distinguir mayúsculas: las
-            # subtareas creadas por la API usan "Pendiente" y las que
-            # marca el organizador "pendiente"/"pospuesto". Con `eq` el
-            # filtro devolvía vacío y rompía US-05.
-            consulta = consulta.ilike(
-                "estado",
-                _escapar_patron(estado_filtrado),
-            )
-
         response = consulta.execute()
 
-        subtareas = response.data or []
+        subtareas = sincronizar_estados_vencimiento(
+            response.data or [],
+            usuario_id,
+            hoy,
+        )
+
+        if estado and estado.strip():
+            estado_filtrado = normalizar_estado(estado)
+            if estado_filtrado in ESTADOS_COMPLETADOS:
+                return preparar_hoy([], hoy, obtener_horas_dia(usuario_id))
+            subtareas = [
+                subtarea
+                for subtarea in subtareas
+                if normalizar_estado(subtarea.get("estado")) == estado_filtrado
+            ]
+
         return preparar_hoy(subtareas, hoy, obtener_horas_dia(usuario_id))
 
     except Exception as error:

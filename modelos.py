@@ -1,8 +1,10 @@
+import math
 from datetime import date
 from typing import Any, Literal, Optional
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     StrictInt,
     field_validator,
@@ -31,6 +33,10 @@ MENSAJE_HORAS_SUBTAREA = (
     "Las horas estimadas de la gestión deben ser mayores que 0."
 )
 
+MENSAJE_HORAS_SUBTAREA_MAXIMO = (
+    "Las horas estimadas de la gestión no pueden superar 24 horas."
+)
+
 MENSAJE_HORAS_INVALIDAS = (
     "La nueva estimación de horas no es válida."
 )
@@ -54,6 +60,14 @@ MENSAJE_TITULO_SUBTAREA = (
 
 MENSAJE_RESPONSABLE = (
     "Debes indicar el usuario responsable del evento."
+)
+
+ESTADOS_SUBTAREA_PERMITIDOS = {"pendiente", "pospuesto", "hecho", "vencido"}
+MENSAJE_ESTADO_SUBTAREA = (
+    "El estado debe ser 'pendiente', 'pospuesto', 'hecho' o 'vencido'."
+)
+MENSAJE_NOTA_SUBTAREA = (
+    "La nota debe ser texto y no puede superar los 300 caracteres."
 )
 
 
@@ -214,9 +228,34 @@ class Subtarea(BaseModel):
     evento_id: str  # UUID en formato string
     titulo: str = Field(..., max_length=120)
     dia_objetivo: date
-    horas_estimadas: float = Field(..., gt=0)
-    estado: Optional[str] = Field(default="Pendiente")
+    horas_estimadas: float = Field(..., gt=0, le=24)
+    estado: str = Field(default="pendiente")
     notas: Optional[str] = Field(default=None, max_length=300)
+
+    @field_validator("estado", mode="before")
+    @classmethod
+    def validar_estado(cls, value: Any) -> str:
+        if not isinstance(value, str):
+            raise ValueError(MENSAJE_ESTADO_SUBTAREA)
+
+        estado = value.strip().lower()
+        if estado not in ESTADOS_SUBTAREA_PERMITIDOS:
+            raise ValueError(MENSAJE_ESTADO_SUBTAREA)
+
+        return estado
+
+    @field_validator("notas", mode="before")
+    @classmethod
+    def limpiar_notas(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(MENSAJE_NOTA_SUBTAREA)
+
+        nota = value.strip()
+        if len(nota) > 300:
+            raise ValueError(MENSAJE_NOTA_SUBTAREA)
+        return nota or None
 
     @field_validator("titulo", mode="before")
     def subtitulo_no_vacio(cls, value: Any) -> Any:
@@ -236,18 +275,24 @@ class Subtarea(BaseModel):
 
     @field_validator("horas_estimadas", mode="before")
     def horas_estimadas_validas(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError(MENSAJE_HORAS_SUBTAREA)
         try:
             horas = float(value)
         except (TypeError, ValueError) as error:
             raise ValueError(MENSAJE_HORAS_SUBTAREA) from error
 
-        if horas <= 0:
+        if not math.isfinite(horas) or horas <= 0:
             raise ValueError(MENSAJE_HORAS_SUBTAREA)
+        if horas > 24:
+            raise ValueError(MENSAJE_HORAS_SUBTAREA_MAXIMO)
 
         return value
 
 
 class SubtareaActualizarParcial(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     evento_id: Optional[str] = None
 
     titulo: Optional[str] = Field(
@@ -259,7 +304,8 @@ class SubtareaActualizarParcial(BaseModel):
 
     horas_estimadas: Optional[float] = Field(
         default=None,
-        gt=0
+        gt=0,
+        le=24,
     )
 
     estado: Optional[str] = None
@@ -273,6 +319,33 @@ class SubtareaActualizarParcial(BaseModel):
         default=None,
         max_length=500
     )
+
+    @field_validator("estado", mode="before")
+    @classmethod
+    def validar_estado(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(MENSAJE_ESTADO_SUBTAREA)
+
+        estado = value.strip().lower()
+        if estado not in ESTADOS_SUBTAREA_PERMITIDOS:
+            raise ValueError(MENSAJE_ESTADO_SUBTAREA)
+
+        return estado
+
+    @field_validator("notas", mode="before")
+    @classmethod
+    def limpiar_notas(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(MENSAJE_NOTA_SUBTAREA)
+
+        nota = value.strip()
+        if len(nota) > 300:
+            raise ValueError(MENSAJE_NOTA_SUBTAREA)
+        return nota or None
 
     @field_validator("titulo", mode="before")
     def subtitulo_no_vacio(
@@ -288,22 +361,48 @@ class SubtareaActualizarParcial(BaseModel):
 
         return titulo
 
+    @field_validator("dia_objetivo", mode="before")
+    @classmethod
+    def validar_dia_objetivo(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return _validar_fecha_texto(value, "día objetivo")
+
     @field_validator("horas_estimadas", mode="before")
     def horas_estimadas_validas(
         cls, value: Any
     ) -> Any:
         if value is None:
             return None
+        if isinstance(value, bool):
+            raise ValueError(MENSAJE_HORAS_SUBTAREA)
 
         try:
             horas = float(value)
         except (TypeError, ValueError) as error:
             raise ValueError(MENSAJE_HORAS_SUBTAREA) from error
 
-        if horas <= 0:
+        if not math.isfinite(horas) or horas <= 0:
             raise ValueError(MENSAJE_HORAS_SUBTAREA)
+        if horas > 24:
+            raise ValueError(MENSAJE_HORAS_SUBTAREA_MAXIMO)
 
         return value
+
+    @model_validator(mode="after")
+    def validar_campos_no_nulos(self) -> "SubtareaActualizarParcial":
+        for campo in (
+            "evento_id",
+            "titulo",
+            "dia_objetivo",
+            "horas_estimadas",
+            "estado",
+        ):
+            if campo in self.model_fields_set and getattr(self, campo) is None:
+                raise ValueError(
+                    f"El campo {campo} no puede ser nulo."
+                )
+        return self
 
 class RegistroRequest(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=100)
@@ -388,6 +487,7 @@ class ReprogramarSubtareaRequest(BaseModel):
     horas_estimadas: Optional[float] = Field(
         default=None,
         gt=0,
+        le=24,
         description=(
             "Nueva estimación de horas. Si se omite se conserva la actual."
         ),
@@ -398,6 +498,23 @@ class ReprogramarSubtareaRequest(BaseModel):
         max_length=500,
         description="Motivo opcional de la reprogramación.",
     )
+
+    @field_validator("horas_estimadas", mode="before")
+    @classmethod
+    def validar_horas_estimadas(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError(MENSAJE_HORAS_INVALIDAS)
+        try:
+            horas = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(MENSAJE_HORAS_INVALIDAS) from error
+        if not math.isfinite(horas) or horas <= 0:
+            raise ValueError(MENSAJE_HORAS_INVALIDAS)
+        if horas > 24:
+            raise ValueError(MENSAJE_HORAS_INVALIDAS)
+        return value
 
 
 class ResolverConflictoSubtareaRequest(BaseModel):
@@ -420,6 +537,7 @@ class ResolverConflictoSubtareaRequest(BaseModel):
     horas_estimadas: float = Field(
         ...,
         gt=0,
+        le=24,
         description=(
             "Nueva estimación de horas de la gestión. Obligatoria."
         ),
@@ -455,12 +573,16 @@ class ResolverConflictoSubtareaRequest(BaseModel):
 
     @field_validator("horas_estimadas", mode="before")
     def horas_validas(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError(MENSAJE_HORAS_INVALIDAS)
         try:
             horas = float(value)
         except (TypeError, ValueError) as error:
             raise ValueError(MENSAJE_HORAS_INVALIDAS) from error
 
-        if horas <= 0:
+        if not math.isfinite(horas) or horas <= 0:
+            raise ValueError(MENSAJE_HORAS_INVALIDAS)
+        if horas > 24:
             raise ValueError(MENSAJE_HORAS_INVALIDAS)
 
         return value
@@ -539,7 +661,7 @@ class ResolverConflictoResponse(BaseModel):
     message: str
     conflicto_resuelto: bool = Field(
         ...,
-        description="False cuando el conflicto persiste tras el ajuste.",
+        description="True: este endpoint solo confirma ajustes dentro del límite.",
     )
     subtarea: dict[str, Any]
     resumen: ResumenSobrecargaDia
@@ -547,4 +669,3 @@ class ResolverConflictoResponse(BaseModel):
 
 class MensajeErrorResponse(BaseModel):
     detail: str = Field(..., description="Mensaje funcional del error.")
-
