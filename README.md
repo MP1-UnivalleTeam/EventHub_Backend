@@ -23,12 +23,12 @@ Para Render se incluye [`render.yaml`](render.yaml). Las variables de Supabase s
 
 ### Endpoint `GET /hoy`
 
-Devuelve las subtareas no completadas agrupadas en `vencidas`, `urgentes` y `proximas`, ordenadas por prioridad temporal y menor esfuerzo como desempate.
+Devuelve las subtareas no completadas agrupadas en `vencidas`, `urgentes` y `proximas`, ordenadas por prioridad temporal y menor esfuerzo como desempate. Al consultar `/hoy` o las subtareas, las tareas no completadas cuya fecha objetivo ya pasó se guardan en Supabase con `estado: "Vencido"`, y ese estado se incluye en la respuesta. Si una fecha vencida se actualiza a hoy o a futuro, el estado vuelve a `"Pendiente"`.
 
-Admite filtros opcionales que se aplican directamente sobre Supabase:
+Admite filtros opcionales:
 
 - `evento_id`: filtra por evento.
-- `estado`: filtra por estado de gestión (sin distinguir mayúsculas: `Pendiente`, `pendiente`, `pospuesto`, `hecho`).
+- `estado`: filtra por estado de gestión (sin distinguir mayúsculas: `Pendiente`, `Vencido`, `pospuesto`, `hecho`).
 
 Ejemplos:
 
