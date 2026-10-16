@@ -94,6 +94,46 @@ def es_completada(estado: Any) -> bool:
     return normalizar_estado(estado) in ESTADOS_COMPLETADOS
 
 
+def sincronizar_estados_vencimiento(
+    subtareas: list[dict],
+    usuario_id: str,
+    hoy: date,
+) -> list[dict]:
+    """Persiste el estado según la fecha para subtareas no completadas."""
+    for subtarea in subtareas:
+        fecha_objetivo = extraer_fecha(subtarea.get("dia_objetivo"))
+        estado_actual = normalizar_estado(subtarea.get("estado"))
+
+        if fecha_objetivo is None or es_completada(estado_actual):
+            continue
+
+        if fecha_objetivo < hoy:
+            estado_nuevo = "vencido"
+        elif estado_actual == "vencido":
+            estado_nuevo = "pendiente"
+        else:
+            continue
+
+        if subtarea.get("estado") == estado_nuevo:
+            continue
+
+        subtarea_id = subtarea.get("id")
+        if subtarea_id is None:
+            raise ValueError("No se puede actualizar una subtarea sin ID.")
+
+        (
+            supabase
+            .table("subtareas")
+            .update({"estado": estado_nuevo})
+            .eq("id", subtarea_id)
+            .eq("usuario_id", usuario_id)
+            .execute()
+        )
+        subtarea["estado"] = estado_nuevo
+
+    return subtareas
+
+
 def extraer_fecha(valor: Any) -> Optional[date]:
     """Lee el campo de fecha objetivo sin asumir el tipo de la columna.
 
