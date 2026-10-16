@@ -30,7 +30,6 @@ from servicios import (
     obtener_fecha_hoy,
     obtener_subtarea_del_usuario,
     obtener_subtareas_del_usuario,
-    sincronizar_estados_vencimiento,
     validar_fecha_objetivo,
 )
 
@@ -123,11 +122,7 @@ def _subtarea_del_usuario_o_404(
             detail="Subtarea no encontrada.",
         )
 
-    return sincronizar_estados_vencimiento(
-        [subtarea],
-        usuario_id,
-        obtener_fecha_hoy(),
-    )[0]
+    return subtarea
 
 
 def _actualizar_subtarea_del_usuario(
@@ -151,11 +146,7 @@ def _actualizar_subtarea_del_usuario(
             detail="Subtarea no encontrada.",
         )
 
-    return sincronizar_estados_vencimiento(
-        [response.data[0]],
-        usuario_id,
-        obtener_fecha_hoy(),
-    )[0]
+    return response.data[0]
 
 
 def verificar_evento_del_usuario(evento_id: str, usuario_id: str) -> dict:
@@ -195,11 +186,7 @@ def obtener_subtareas(
             query = query.eq("evento_id", evento_id)
 
         response = query.execute()
-        return sincronizar_estados_vencimiento(
-            response.data or [],
-            current_user["id"],
-            obtener_fecha_hoy(),
-        )
+        return response.data
 
     except HTTPException:
         raise
