@@ -18,6 +18,9 @@ from servicios import (  # noqa: F401
     ZONA_HORARIA_EVENTHUB,
     construir_resumen_sobrecarga,
     es_completada,
+    es_vencida,
+    extraer_fecha,
+    nota_canonica,
     normalizar_estado,
     obtener_fecha_hoy,
     obtener_horas_dia,
@@ -31,12 +34,17 @@ router = APIRouter(prefix="/hoy", tags=["Hoy"])
 
 
 def clasificar_subtarea(subtarea: dict, hoy: date) -> str:
-    fecha_objetivo = date.fromisoformat(str(subtarea["dia_objetivo"])[:10])
+    """Agrupa la gestión con la regla de vencimiento del dominio.
 
-    if normalizar_estado(subtarea.get("estado")) == "vencido":
+    No se deduce del estado persistido: una pospuesta cuya fecha
+    reprogramada ya pasó también está vencida.
+    """
+    if es_vencida(subtarea, hoy):
         return "vencida"
-    if fecha_objetivo == hoy:
+
+    if extraer_fecha(subtarea.get("dia_objetivo")) == hoy:
         return "urgente"
+
     return "proxima"
 
 
@@ -93,7 +101,13 @@ def preparar_hoy(
             continue
 
         grupo = clasificar_subtarea(subtarea, hoy)
-        item = {**subtarea, "prioridad": grupo}
+        # `nota` es la nota ya resuelta: el cliente no tiene que decidir de qué
+        # columna leerla.
+        item = {
+            **subtarea,
+            "prioridad": grupo,
+            "nota": nota_canonica(subtarea),
+        }
 
         if grupo == "vencida":
             vencidas.append(item)
