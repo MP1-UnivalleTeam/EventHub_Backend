@@ -20,16 +20,17 @@ from modelos import (
 from servicios import (
     ESTRATEGIAS_RESOLUCION,
     MENSAJE_CONFLICTO_RESUELTO,
-    MENSAJE_REDUCCION_INSUFICIENTE,
     MENSAJE_REPROGRAMADA,
     evaluar_dia,
     evaluar_sobrecarga,
+    es_completada,
     extraer_fecha,
     horas_a_float,
     mensaje_sobrecarga,
     obtener_fecha_hoy,
     obtener_subtarea_del_usuario,
     obtener_subtareas_del_usuario,
+    sincronizar_estados_vencimiento,
     validar_fecha_objetivo,
 )
 
@@ -49,6 +50,67 @@ def _fecha_valida_o_error(fecha: date) -> date:
         ) from error
 
 
+def _validar_fecha_del_evento_o_error(fecha: date, evento: dict) -> None:
+    fecha_evento = extraer_fecha(evento.get("fecha"))
+    if fecha_evento is not None and fecha > fecha_evento:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fecha objetivo no puede ser posterior a la fecha del evento.",
+        )
+
+
+def _respuesta_conflicto_planificacion(
+    usuario_id: str,
+    subtarea_id: str | None,
+    fecha: date,
+    horas: float,
+    estado: str | None,
+    subtarea_sin_cambios: dict | None = None,
+) -> JSONResponse | None:
+    if es_completada(estado) or fecha < obtener_fecha_hoy():
+        return None
+
+    resumen = evaluar_sobrecarga(
+        usuario_id,
+        fecha,
+        horas,
+        excluir_subtarea_id=subtarea_id,
+    )
+    if not resumen["conflicto"]:
+        return None
+
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": mensaje_sobrecarga(
+                resumen["horas_planificadas"],
+                resumen["limite_horas_dia"],
+            ),
+            **resumen,
+            "subtarea": subtarea_sin_cambios,
+            "estrategias_disponibles": list(ESTRATEGIAS_RESOLUCION),
+        },
+    )
+
+
+def _cambia_planificacion(
+    subtarea: dict,
+    fecha: date,
+    horas: float,
+    estado: str | None,
+) -> bool:
+    fecha_actual = extraer_fecha(subtarea.get("dia_objetivo"))
+    horas_actuales = round(
+        horas_a_float(subtarea.get("horas_estimadas")),
+        2,
+    )
+    return (
+        fecha_actual != fecha
+        or horas_actuales != round(horas, 2)
+        or es_completada(subtarea.get("estado")) != es_completada(estado)
+    )
+
+
 def _subtarea_del_usuario_o_404(
     subtarea_id: str,
     usuario_id: str,
@@ -61,7 +123,11 @@ def _subtarea_del_usuario_o_404(
             detail="Subtarea no encontrada.",
         )
 
-    return subtarea
+    return sincronizar_estados_vencimiento(
+        [subtarea],
+        usuario_id,
+        obtener_fecha_hoy(),
+    )[0]
 
 
 def _actualizar_subtarea_del_usuario(
@@ -85,14 +151,18 @@ def _actualizar_subtarea_del_usuario(
             detail="Subtarea no encontrada.",
         )
 
-    return response.data[0]
+    return sincronizar_estados_vencimiento(
+        [response.data[0]],
+        usuario_id,
+        obtener_fecha_hoy(),
+    )[0]
 
 
-def verificar_evento_del_usuario(evento_id: str, usuario_id: str) -> None:
+def verificar_evento_del_usuario(evento_id: str, usuario_id: str) -> dict:
     response = (
         supabase
         .table("eventos")
-        .select("id")
+        .select("id, fecha")
         .eq("id", evento_id)
         .eq("usuario_id", usuario_id)
         .execute()
@@ -103,6 +173,7 @@ def verificar_evento_del_usuario(evento_id: str, usuario_id: str) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Evento no encontrado.",
         )
+    return response.data[0]
 
 
 @router.get("/")
@@ -124,7 +195,11 @@ def obtener_subtareas(
             query = query.eq("evento_id", evento_id)
 
         response = query.execute()
-        return response.data
+        return sincronizar_estados_vencimiento(
+            response.data or [],
+            current_user["id"],
+            obtener_fecha_hoy(),
+        )
 
     except HTTPException:
         raise
@@ -144,10 +219,22 @@ def crear_subtarea(
     try:
         usuario_id = current_user["id"]
 
-        verificar_evento_del_usuario(
+        evento = verificar_evento_del_usuario(
             subtarea.evento_id,
             usuario_id
         )
+        _fecha_valida_o_error(subtarea.dia_objetivo)
+        _validar_fecha_del_evento_o_error(subtarea.dia_objetivo, evento)
+
+        conflicto = _respuesta_conflicto_planificacion(
+            usuario_id,
+            None,
+            subtarea.dia_objetivo,
+            subtarea.horas_estimadas,
+            subtarea.estado,
+        )
+        if conflicto:
+            return conflicto
 
         datos = {
             "evento_id": subtarea.evento_id,
@@ -172,7 +259,11 @@ def crear_subtarea(
                 detail="No se pudo crear la subtarea.",
             )
 
-        return response.data[0]
+        return sincronizar_estados_vencimiento(
+            [response.data[0]],
+            usuario_id,
+            obtener_fecha_hoy(),
+        )[0]
 
     except HTTPException:
         raise
@@ -185,7 +276,20 @@ def crear_subtarea(
         ) from error
 
 
-@router.put("/{subtarea_id}")
+@router.put(
+    "/{subtarea_id}",
+    responses={
+        400: {"model": MensajeErrorResponse},
+        401: {"model": MensajeErrorResponse},
+        404: {"model": MensajeErrorResponse},
+        409: {
+            "model": ConflictoSobreCargaResponse,
+            "description": "La actualización excedería el límite diario y no se guardó.",
+        },
+        422: {"model": MensajeErrorResponse},
+        502: {"model": MensajeErrorResponse},
+    },
+)
 def actualizar_subtarea(
     subtarea_id: str,
     subtarea: Subtarea,
@@ -193,10 +297,12 @@ def actualizar_subtarea(
 ):
     try:
         usuario_id = current_user["id"]
-        verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
+        existente = _subtarea_del_usuario_o_404(subtarea_id, usuario_id)
+        evento = verificar_evento_del_usuario(subtarea.evento_id, usuario_id)
 
         # La fecha objetivo no puede quedar en el pasado.
         _fecha_valida_o_error(subtarea.dia_objetivo)
+        _validar_fecha_del_evento_o_error(subtarea.dia_objetivo, evento)
 
         datos = subtarea.model_dump(exclude_none=True)
         datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
@@ -206,23 +312,33 @@ def actualizar_subtarea(
         # ejecución de la gestión (hecha/pospuesta) en cada edición.
         if "estado" not in subtarea.model_fields_set:
             datos.pop("estado", None)
-
-        response = (
-            supabase
-            .table("subtareas")
-            .update(datos)
-            .eq("id", subtarea_id)
-            .eq("usuario_id", usuario_id)
-            .execute()
+        estado_resultante = (
+            subtarea.estado
+            if "estado" in subtarea.model_fields_set
+            else existente.get("estado")
         )
-
-        if not response.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subtarea no encontrada.",
+        if _cambia_planificacion(
+            existente,
+            subtarea.dia_objetivo,
+            subtarea.horas_estimadas,
+            estado_resultante,
+        ):
+            conflicto = _respuesta_conflicto_planificacion(
+                usuario_id,
+                subtarea_id,
+                subtarea.dia_objetivo,
+                subtarea.horas_estimadas,
+                estado_resultante,
+                existente,
             )
+            if conflicto:
+                return conflicto
 
-        return response.data[0]
+        return _actualizar_subtarea_del_usuario(
+            subtarea_id,
+            usuario_id,
+            datos,
+        )
 
     except HTTPException:
         raise
@@ -234,7 +350,20 @@ def actualizar_subtarea(
         ) from error
 
 
-@router.patch("/{subtarea_id}")
+@router.patch(
+    "/{subtarea_id}",
+    responses={
+        400: {"model": MensajeErrorResponse},
+        401: {"model": MensajeErrorResponse},
+        404: {"model": MensajeErrorResponse},
+        409: {
+            "model": ConflictoSobreCargaResponse,
+            "description": "La actualización excedería el límite diario y no se guardó.",
+        },
+        422: {"model": MensajeErrorResponse},
+        502: {"model": MensajeErrorResponse},
+    },
+)
 def actualizar_subtarea_parcial(
     subtarea_id: str,
     subtarea: SubtareaActualizarParcial,
@@ -242,6 +371,7 @@ def actualizar_subtarea_parcial(
 ):
     try:
         usuario_id = current_user["id"]
+        existente = _subtarea_del_usuario_o_404(subtarea_id, usuario_id)
         datos = subtarea.model_dump(exclude_none=True)
 
         if "dia_objetivo" in datos and subtarea.dia_objetivo is not None:
@@ -249,26 +379,66 @@ def actualizar_subtarea_parcial(
             _fecha_valida_o_error(subtarea.dia_objetivo)
             datos["dia_objetivo"] = subtarea.dia_objetivo.isoformat()
 
-        if "evento_id" in datos:
-            verificar_evento_del_usuario(datos["evento_id"], usuario_id)
+        if "notas" in subtarea.model_fields_set:
+            datos["notas"] = subtarea.notas
 
-        # La subtarea que se modifica también debe pertenecer al usuario.
-        response = (
-            supabase
-            .table("subtareas")
-            .update(datos)
-            .eq("id", subtarea_id)
-            .eq("usuario_id", usuario_id)
-            .execute()
-        )
-
-        if not response.data:
+        if not datos:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subtarea no encontrada.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Debes indicar al menos un campo para actualizar.",
             )
 
-        return response.data[0]
+        evento_id = datos.get("evento_id", existente.get("evento_id"))
+        evento = verificar_evento_del_usuario(evento_id, usuario_id)
+        fecha_resultante = (
+            subtarea.dia_objetivo
+            if "dia_objetivo" in subtarea.model_fields_set
+            else extraer_fecha(existente.get("dia_objetivo"))
+        )
+        if (
+            fecha_resultante is not None
+            and (
+                "dia_objetivo" in subtarea.model_fields_set
+                or "evento_id" in subtarea.model_fields_set
+            )
+        ):
+            _fecha_valida_o_error(fecha_resultante)
+            _validar_fecha_del_evento_o_error(fecha_resultante, evento)
+
+        estado_resultante = (
+            subtarea.estado
+            if "estado" in subtarea.model_fields_set
+            and subtarea.estado is not None
+            else existente.get("estado")
+        )
+        horas_resultantes = (
+            subtarea.horas_estimadas
+            if "horas_estimadas" in subtarea.model_fields_set
+            and subtarea.horas_estimadas is not None
+            else horas_a_float(existente.get("horas_estimadas"))
+        )
+        if fecha_resultante is not None and _cambia_planificacion(
+            existente,
+            fecha_resultante,
+            horas_resultantes,
+            estado_resultante,
+        ):
+            conflicto = _respuesta_conflicto_planificacion(
+                usuario_id,
+                subtarea_id,
+                fecha_resultante,
+                horas_resultantes,
+                estado_resultante,
+                existente,
+            )
+            if conflicto:
+                return conflicto
+
+        return _actualizar_subtarea_del_usuario(
+            subtarea_id,
+            usuario_id,
+            datos,
+        )
 
     except HTTPException:
         raise
@@ -286,19 +456,41 @@ def eliminar_subtarea(
     current_user: dict = Depends(get_current_user),
 ):
     try:
+        usuario_id = current_user["id"]
+        subtarea = (
+            supabase
+            .table("subtareas")
+            .select("id")
+            .eq("id", subtarea_id)
+            .eq("usuario_id", usuario_id)
+            .execute()
+        )
+
+        if not subtarea.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subtarea no encontrada.",
+            )
+
         response = (
             supabase
             .table("subtareas")
             .delete()
             .eq("id", subtarea_id)
-            .eq("usuario_id", current_user["id"])
+            .eq("usuario_id", usuario_id)
+            .select("id")
             .execute()
         )
 
         if not response.data:
+            logger.error(
+                "Supabase no confirmó el borrado de subtarea %s para %s",
+                subtarea_id,
+                usuario_id,
+            )
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subtarea no encontrada.",
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No fue posible confirmar la eliminación de la subtarea.",
             )
 
         return {"message": "Subtarea eliminada correctamente."}
@@ -477,6 +669,13 @@ def reprogramar_subtarea(
                 "no es 'reducir_horas'."
             ),
         },
+        409: {
+            "model": ConflictoSobreCargaResponse,
+            "description": (
+                "La reducción no alcanza a respetar el límite; no se guarda "
+                "el cambio."
+            ),
+        },
         502: {
             "model": MensajeErrorResponse,
             "description": "Error de la base de datos.",
@@ -495,9 +694,8 @@ def resolver_conflicto(
     que devuelve 409 sin persistir cuando la fecha destino seguiría
     sobrecargada.
 
-    Reduce la estimación, persiste el cambio y recalcula la carga del
-    día. Si la reducción no alcanza, la estimación queda guardada y el
-    conflicto se mantiene activo.
+    Persiste la reducción solo cuando el resultado respeta el límite diario.
+    Si no alcanza, responde 409 y deja la subtarea sin cambios.
     """
     try:
         usuario_id = current_user["id"]
@@ -526,6 +724,20 @@ def resolver_conflicto(
             subtareas=registros,
         )
 
+        if resumen["conflicto"]:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "detail": mensaje_sobrecarga(
+                        resumen["horas_planificadas"],
+                        resumen["limite_horas_dia"],
+                    ),
+                    **resumen,
+                    "subtarea": subtarea,
+                    "estrategias_disponibles": list(ESTRATEGIAS_RESOLUCION),
+                },
+            )
+
         subtarea_actualizada = _actualizar_subtarea_del_usuario(
             subtarea_id,
             usuario_id,
@@ -533,12 +745,8 @@ def resolver_conflicto(
         )
 
         return {
-            "message": (
-                MENSAJE_REDUCCION_INSUFICIENTE
-                if resumen["conflicto"]
-                else MENSAJE_CONFLICTO_RESUELTO
-            ),
-            "conflicto_resuelto": not resumen["conflicto"],
+            "message": MENSAJE_CONFLICTO_RESUELTO,
+            "conflicto_resuelto": True,
             "subtarea": subtarea_actualizada,
             "resumen": resumen,
         }
