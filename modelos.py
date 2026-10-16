@@ -62,9 +62,9 @@ MENSAJE_RESPONSABLE = (
     "Debes indicar el usuario responsable del evento."
 )
 
-ESTADOS_SUBTAREA_PERMITIDOS = {"pendiente", "pospuesto", "hecho"}
+ESTADOS_SUBTAREA_PERMITIDOS = {"pendiente", "pospuesto", "hecho", "vencido"}
 MENSAJE_ESTADO_SUBTAREA = (
-    "El estado debe ser 'pendiente', 'pospuesto' o 'hecho'."
+    "El estado debe ser 'pendiente', 'pospuesto', 'hecho' o 'vencido'."
 )
 MENSAJE_NOTA_SUBTAREA = (
     "La nota debe ser texto y no puede superar los 300 caracteres."

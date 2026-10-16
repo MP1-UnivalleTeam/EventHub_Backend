@@ -23,12 +23,14 @@ Para Render se incluye [`render.yaml`](render.yaml). Las variables de Supabase s
 
 ### Endpoint `GET /hoy`
 
-Devuelve las subtareas no completadas agrupadas en `vencidas`, `urgentes` y `proximas`, ordenadas por prioridad temporal y menor esfuerzo como desempate.
+Devuelve las subtareas no completadas agrupadas en `vencidas`, `urgentes` y `proximas`, ordenadas por prioridad temporal y menor esfuerzo como desempate. Al consultar `/hoy` o `/subtareas`, el backend persiste `estado: "vencido"` en gestiones no completadas con fecha objetivo anterior a hoy y devuelve ese estado junto con la gestión. `/hoy` las incluye en `vencidas`. Si una gestión vencida se reprograma para hoy o una fecha futura, su estado vuelve a `"pendiente"`.
 
-Admite filtros opcionales que se aplican directamente sobre Supabase:
+Admite filtros opcionales. El filtro `estado` se evalúa después de sincronizar
+las fechas vencidas, de modo que `estado=vencido` ya incluya los cambios recién
+persistidos:
 
 - `evento_id`: filtra por evento.
-- `estado`: filtra por estado de gestión (sin distinguir mayúsculas: `Pendiente`, `pendiente`, `pospuesto`, `hecho`).
+- `estado`: filtra por estado de gestión (sin distinguir mayúsculas: `pendiente`, `pospuesto`, `hecho` y `vencido`).
 
 Ejemplos:
 
@@ -41,8 +43,9 @@ La estructura de respuesta se mantiene igual independientemente de los filtros. 
 ### Cambiar el estado de una subtarea
 
 `PATCH /subtareas/{id}` permite actualizar parcialmente una subtarea. Los
-estados admitidos son `pendiente`, `pospuesto` y `hecho`; la comparación no
-distingue mayúsculas y el backend persiste el valor normalizado en minúsculas.
+estados admitidos son `pendiente`, `pospuesto`, `hecho` y `vencido`; la
+comparación no distingue mayúsculas y el backend persiste el valor normalizado
+en minúsculas.
 La nota opcional se envía en `notas` y admite hasta 300 caracteres.
 
 ```json
