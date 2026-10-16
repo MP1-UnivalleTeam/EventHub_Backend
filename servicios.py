@@ -51,6 +51,11 @@ ESTADOS_COMPLETADOS = {
     "ejecutado",
 }
 
+ESTADOS_POSPUESTOS = {
+    "pospuesta",
+    "pospuesto",
+}
+
 
 # ============================================================
 # MENSAJES FUNCIONALES
@@ -94,12 +99,67 @@ def es_completada(estado: Any) -> bool:
     return normalizar_estado(estado) in ESTADOS_COMPLETADOS
 
 
+def es_pospuesta(estado: Any) -> bool:
+    return normalizar_estado(estado) in ESTADOS_POSPUESTOS
+
+
+def nota_canonica(subtarea: dict) -> Optional[str]:
+    """Nota de la subtarea leída de su columna canónica, `notas`.
+
+    Devuelve `None` cuando no hay nota o solo hay espacios, de modo que los
+    consumidores no tengan que tratar cadenas vacías.
+    """
+    valor = subtarea.get("notas")
+
+    if valor is None:
+        return None
+
+    nota = str(valor).strip()
+
+    return nota or None
+
+
+def es_vencida(subtarea: dict, hoy: date) -> bool:
+    """Regla definitiva de vencimiento.
+
+    Vence solo lo que NO está completado y tiene la fecha de gestión
+    (la reprogramada si está pospuesta) anterior a hoy. Una fecha límite
+    igual al día actual sigue vigente: no vence.
+    """
+    if es_completada(subtarea.get("estado")):
+        return False
+
+    fecha_objetivo = extraer_fecha(subtarea.get("dia_objetivo"))
+
+    return fecha_objetivo is not None and fecha_objetivo < hoy
+
+
+def estado_efectivo(subtarea: dict, hoy: date) -> str:
+    """Estado que deben ver las vistas: hecho, vencido, pospuesto o pendiente."""
+    estado = normalizar_estado(subtarea.get("estado"))
+
+    if es_completada(estado):
+        return "hecho"
+
+    if es_vencida(subtarea, hoy):
+        return "vencido"
+
+    if es_pospuesta(estado):
+        return "pospuesto"
+
+    return "pendiente"
+
+
 def sincronizar_estados_vencimiento(
     subtareas: list[dict],
     usuario_id: str,
     hoy: date,
 ) -> list[dict]:
-    """Persiste el estado según la fecha para subtareas no completadas."""
+    """Persiste el estado "vencido" según la fecha de gestión.
+
+    Las categorías se derivan de `es_vencida`, la misma regla que usan
+    `/hoy` y el cálculo de progreso del frontend.
+    """
     for subtarea in subtareas:
         fecha_objetivo = extraer_fecha(subtarea.get("dia_objetivo"))
         estado_actual = normalizar_estado(subtarea.get("estado"))
@@ -107,7 +167,10 @@ def sincronizar_estados_vencimiento(
         if fecha_objetivo is None or es_completada(estado_actual):
             continue
 
-        if fecha_objetivo < hoy:
+        # Una pospuesta conserva su estado: "vencido" se deriva al presentar, no se
+        # graba encima, así al moverla a una fecha futura vuelve a verse como
+        # pospuesta.
+        if es_vencida(subtarea, hoy) and not es_pospuesta(estado_actual):
             estado_nuevo = "vencido"
         elif estado_actual == "vencido":
             estado_nuevo = "pendiente"

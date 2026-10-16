@@ -315,11 +315,6 @@ class SubtareaActualizarParcial(BaseModel):
         max_length=300
     )
 
-    motivo_posposicion: Optional[str] = Field(
-        default=None,
-        max_length=500
-    )
-
     @field_validator("estado", mode="before")
     @classmethod
     def validar_estado(cls, value: Any) -> Any:
@@ -493,11 +488,24 @@ class ReprogramarSubtareaRequest(BaseModel):
         ),
     )
 
-    motivo_posposicion: Optional[str] = Field(
+    notas: Optional[str] = Field(
         default=None,
-        max_length=500,
-        description="Motivo opcional de la reprogramación.",
+        max_length=300,
+        description=(
+            "Nota opcional de la reprogramación. Si se omite o llega vacía se "
+            "conserva la nota guardada."
+        ),
     )
+
+    @field_validator("notas", mode="before")
+    @classmethod
+    def limpiar_notas(cls, value: Any) -> Any:
+        """La nota nunca es obligatoria: vacío equivale a "sin cambios"."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(MENSAJE_NOTA_SUBTAREA)
+        return value.strip() or None
 
     @field_validator("horas_estimadas", mode="before")
     @classmethod
@@ -543,11 +551,24 @@ class ResolverConflictoSubtareaRequest(BaseModel):
         ),
     )
 
-    motivo_posposicion: Optional[str] = Field(
+    notas: Optional[str] = Field(
         default=None,
-        max_length=500,
-        description="Motivo opcional de la resolución.",
+        max_length=300,
+        description=(
+            "Nota opcional de la resolución. Si se omite o llega vacía se "
+            "conserva la nota guardada."
+        ),
     )
+
+    @field_validator("notas", mode="before")
+    @classmethod
+    def limpiar_notas(cls, value: Any) -> Any:
+        """La nota nunca es obligatoria: vacío equivale a "sin cambios"."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(MENSAJE_NOTA_SUBTAREA)
+        return value.strip() or None
 
     @model_validator(mode="before")
     @classmethod
