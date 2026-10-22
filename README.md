@@ -90,7 +90,7 @@ EventHub_Backend/
 1. Clona este repositorio:
 
 ```bash
-git clone <URL_DEL_REPOSITORIO_BACKEND>
+git clone https://github.com/MP1-UnivalleTeam/EventHub_Backend.git
 cd EventHub_Backend
 ```
 
@@ -224,8 +224,8 @@ Configura las siguientes variables de entorno como **Secret Environment Variable
 
 Este backend está diseñado para consumirse desde el frontend de EventHub, que vive en un **repositorio separado**:
 
-- Repositorio frontend: `EventHub_Frontend` (React 19 + Vite, desplegado en Vercel).
-- Documentación del contrato API: consulta `README_FRONTEND_API.md` si existe en el repo del frontend, o acuerda los endpoints con el equipo de frontend.
+- Repositorio frontend: `https://github.com/MP1-UnivalleTeam/EventHub_Frontend.git` (React 19 + Vite, desplegado en Vercel).
+- Documentación del contrato API: este repositorio incluye `README_FRONTEND_API.md` con la documentación de endpoints, payloads y errores.
 
 Cada repositorio es independiente: clona, configura y despliega cada uno por separado.
 
