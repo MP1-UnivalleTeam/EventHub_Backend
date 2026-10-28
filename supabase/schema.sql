@@ -22,7 +22,7 @@ create index if not exists subtareas_evento_id_idx
 -- Antes de hacer NOT NULL, asigna usuario_id a los registros históricos.
 -- Ejemplo (solo si corresponde a tu migración):
 -- update public.eventos set usuario_id = '<UUID_DEL_ORGANIZADOR>';
--- update public.subtareas set usuario_id = '<UUID_DEL_ORGANIZADOR>';
+-- update public.subtareas set usuario_id = '<UUID_DEL_ORGANIZADOR>.';
 
 -- Cuando todos los registros tengan propietario:
 -- alter table public.eventos alter column usuario_id set not null;
