@@ -650,7 +650,7 @@ def reprogramar_subtarea(
 
 
 # ============================================================
-# BE-04 — RESOLUCIÓN DE CONFLICTO
+# BE-04 — RESOLUCIÓN DE CONFLICTO.
 # ============================================================
 
 @router.patch(

@@ -468,7 +468,7 @@ class ConfiguracionUsuarioResponse(BaseModel):
 
 
 # ============================================================
-# BE-01 / BE-03 / BE-04 — reprogramación y resolución de conflictos
+# BE-01 / BE-03 / BE-04 — reprogramación y resolución de conflictos.
 # ============================================================
 
 class ReprogramarSubtareaRequest(BaseModel):
