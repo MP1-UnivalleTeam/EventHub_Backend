@@ -747,5 +747,18 @@ class PerfilUsuarioResponse(BaseModel):
     email: str
 
 
+class PerfilUsuarioActualizarRequest(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=100)
+    apellido: str = Field(..., min_length=2, max_length=100)
+
+    @field_validator("nombre", "apellido")
+    @classmethod
+    def limpiar_nombre_apellido(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("El nombre y apellido deben tener al menos 2 caracteres.")
+        return value
+
+
 class MensajeErrorResponse(BaseModel):
     detail: str = Field(..., description="Mensaje funcional del error.")
