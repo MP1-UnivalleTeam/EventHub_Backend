@@ -267,6 +267,7 @@ def actualizar_perfil(
                 "apellido": perfil.apellido,
             })
             .eq("usuario_id", usuario_id)
+            .select("nombre, apellido, email")
             .execute()
         )
 
