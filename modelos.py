@@ -267,6 +267,17 @@ class Subtarea(BaseModel):
             raise ValueError(MENSAJE_NOTA_SUBTAREA)
         return nota or None
 
+    @field_validator("responsable", mode="before")
+    @classmethod
+    def limpiar_responsable(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("El responsable debe ser texto o quedar vacío.")
+
+        responsable = value.strip()
+        return responsable or None
+
     @field_validator("titulo", mode="before")
     def subtitulo_no_vacio(cls, value: Any) -> Any:
         if not isinstance(value, str):
@@ -325,6 +336,12 @@ class SubtareaActualizarParcial(BaseModel):
         max_length=300
     )
 
+    responsable: Optional[str] = Field(
+        default=None,
+        max_length=150,
+        description="Persona responsable de ejecutar la subtarea.",
+    )
+
     @field_validator("estado", mode="before")
     @classmethod
     def validar_estado(cls, value: Any) -> Any:
@@ -351,6 +368,17 @@ class SubtareaActualizarParcial(BaseModel):
         if len(nota) > 300:
             raise ValueError(MENSAJE_NOTA_SUBTAREA)
         return nota or None
+
+    @field_validator("responsable", mode="before")
+    @classmethod
+    def limpiar_responsable(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("El responsable debe ser texto o quedar vacío.")
+
+        responsable = value.strip()
+        return responsable or None
 
     @field_validator("titulo", mode="before")
     def subtitulo_no_vacio(
