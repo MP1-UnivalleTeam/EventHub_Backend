@@ -231,6 +231,16 @@ class Subtarea(BaseModel):
     horas_estimadas: float = Field(..., gt=0, le=24)
     estado: str = Field(default="pendiente")
     notas: Optional[str] = Field(default=None, max_length=300)
+    responsable: Optional[str] = Field(
+        default=None,
+        max_length=150,
+        description="Persona responsable de ejecutar la subtarea.",
+    )
+    comprobante_url: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="URL del comprobante subido a Cloudinary.",
+    )
 
     @field_validator("estado", mode="before")
     @classmethod
@@ -686,6 +696,21 @@ class ResolverConflictoResponse(BaseModel):
     )
     subtarea: dict[str, Any]
     resumen: ResumenSobrecargaDia
+
+
+class ComprobanteSubidaResponse(BaseModel):
+    """Respuesta al subir un comprobante de imagen a Cloudinary."""
+
+    message: str
+    subtarea_id: str
+    comprobante_url: str
+
+
+class FotoPerfilResponse(BaseModel):
+    """Respuesta al subir/actualizar la foto de perfil en Supabase Storage."""
+
+    message: str
+    foto_perfil_url: str
 
 
 class MensajeErrorResponse(BaseModel):
