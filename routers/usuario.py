@@ -10,6 +10,7 @@ from modelos import (
     ConfiguracionUsuarioResponse,
     FotoPerfilResponse,
     MensajeErrorResponse,
+    PerfilUsuarioActualizarRequest,
     PerfilUsuarioResponse,
 )
 from servicios import (
@@ -226,6 +227,69 @@ def obtener_perfil(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="No fue posible consultar el perfil del usuario.",
+        ) from error
+
+
+@router.put(
+    "/perfil",
+    response_model=PerfilUsuarioResponse,
+    responses={
+        401: {
+            "model": MensajeErrorResponse,
+            "description": "Falta el token de autenticación.",
+        },
+        404: {
+            "model": MensajeErrorResponse,
+            "description": "Perfil no encontrado.",
+        },
+        422: {
+            "model": MensajeErrorResponse,
+            "description": "Nombre o apellido inválidos.",
+        },
+        502: {
+            "model": MensajeErrorResponse,
+            "description": "Error actualizando el perfil.",
+        },
+    },
+)
+def actualizar_perfil(
+    perfil: PerfilUsuarioActualizarRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    usuario_id = current_user["id"]
+
+    try:
+        response = (
+            supabase
+            .table("usuarios")
+            .update({
+                "nombre": perfil.nombre,
+                "apellido": perfil.apellido,
+            })
+            .eq("usuario_id", usuario_id)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Perfil de usuario no encontrado.",
+            )
+
+        usuario = response.data[0]
+        return {
+            "nombre": usuario["nombre"],
+            "apellido": usuario["apellido"],
+            "email": usuario["email"],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Error actualizando el perfil de usuario")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No fue posible actualizar el perfil del usuario.",
         ) from error
 
 
