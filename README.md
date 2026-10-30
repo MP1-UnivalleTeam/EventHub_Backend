@@ -1,237 +1,244 @@
-# EventHub API
+# EventHub Backend
 
-API FastAPI que recibe los eventos del frontend y los persiste en Supabase.
+API REST desarrollada con **FastAPI** y **Python** que gestiona eventos, subtareas y la planificación diaria de un organizador. Los datos se persisten en **Supabase (PostgreSQL)** y la autenticación se maneja a través de Supabase Auth.
 
-## Ejecutar localmente
+Este backend está desplegado en **Render** y se comunica con el frontend de EventHub, que vive en un **repositorio separado**.
 
-1. Copia `.env.example` a `.env` y completa las credenciales de Supabase.
-2. Instala dependencias con `pip install -r requirements.txt`.
-3. Ejecuta `uvicorn main:app --reload`.
-4. Abre `http://127.0.0.1:8000/docs`.
+---
 
-Endpoints principales:
+## 📋 Tabla de contenidos
 
-- `GET /health`: comprueba la conexión a Supabase.
-- `GET /eventos`: consulta registros persistidos.
-- `GET /eventos/{id}`: devuelve el detalle del evento con `total_subtareas`
-  y `total_ejecutadas`. Solo los estados que representan una ejecución
-  finalizada cuentan como ejecutadas; `pospuesto` no cuenta.
-- `GET /hoy/`: devuelve las subtareas pendientes agrupadas en vencidas, urgentes del día y próximas.
-- `POST /eventos`: crea un evento y devuelve `201` con el registro creado.
+- [Sobre el proyecto](#sobre-el-proyecto)
+- [Stack tecnológico](#stack-tecnológico)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Requisitos previos](#requisitos-previos)
+- [Instalación local](#instalación-local)
+- [Variables de entorno](#variables-de-entorno)
+- [Ejecutar en desarrollo](#ejecutar-en-desarrollo)
+- [Endpoints principales](#endpoints-principales)
+- [Despliegue en Render](#despliegue-en-render)
+- [Relación con el frontend](#relación-con-el-frontend)
+- [Contribución](#contribución)
+- [Licencia](#licencia)
 
-Para Render se incluye [`render.yaml`](render.yaml). Las variables de Supabase se configuran como secretos del servicio, nunca en el frontend.
+---
 
-### Endpoint `GET /hoy`
+## Sobre el proyecto
 
-Devuelve las subtareas no completadas agrupadas en `vencidas`, `urgentes` y `proximas`, ordenadas por prioridad temporal y menor esfuerzo como desempate. Al consultar `/hoy` o `/subtareas`, el backend persiste `estado: "vencido"` en gestiones no completadas con fecha objetivo anterior a hoy y devuelve ese estado junto con la gestión. `/hoy` las incluye en `vencidas`. Si una gestión vencida se reprograma para hoy o una fecha futura, su estado vuelve a `"pendiente"`.
+EventHub Backend expone los recursos necesarios para:
 
-Admite filtros opcionales. El filtro `estado` se evalúa después de sincronizar
-las fechas vencidas, de modo que `estado=vencido` ya incluya los cambios recién
-persistidos:
+- Autenticar organizadores (registro y login con Supabase Auth).
+- Crear, editar y eliminar eventos.
+- Gestionar subtareas asociadas a cada evento, incluyendo reprogramación y control de capacidad diaria.
+- Consultar la vista "Hoy" con gestiones agrupadas en vencidas, urgentes y próximas.
+- Consultar y actualizar el límite de horas por día del organizador.
 
-- `evento_id`: filtra por evento.
-- `estado`: filtra por estado de gestión (sin distinguir mayúsculas: `pendiente`, `pospuesto`, `hecho` y `vencido`).
+Todas las consultas de eventos y subtareas están filtradas por el usuario autenticado (`usuario_id`), garantizando aislamiento entre organizadores.
 
-Ejemplos:
+---
 
-- `GET /hoy?evento_id=<id>`
-- `GET /hoy?estado=Pendiente`
-- `GET /hoy?evento_id=<id>&estado=Pendiente`
+## Stack tecnológico
 
-La estructura de respuesta se mantiene igual independientemente de los filtros. Las subtareas completadas siguen excluidas por la regla de negocio de la vista Hoy.
+| Capa | Tecnología | Propósito |
+|------|-----------|-----------|
+| Lenguaje | Python 3.10+ | Lógica del backend |
+| Framework | FastAPI | API REST, validación con Pydantic v2 |
+| Servidor | Uvicorn | Servidor ASGI de producción |
+| Base de datos | Supabase (PostgreSQL) | Almacenamiento y autenticación |
+| Cliente Supabase | `supabase` (Python) | Conexión a Supabase desde el backend |
+| Variables de entorno | `python-dotenv` | Carga de `.env` en desarrollo |
+| Zona horaria | `tzdata` | Fechas consistentes (zona de Colombia) |
 
-### Cambiar el estado de una subtarea
+---
 
-`PATCH /subtareas/{id}` permite actualizar parcialmente una subtarea. Los
-estados admitidos son `pendiente`, `pospuesto`, `hecho` y `vencido`; la
-comparación no distingue mayúsculas y el backend persiste el valor normalizado
-en minúsculas.
-La nota opcional se envía en `notas` y admite hasta 300 caracteres.
-
-```json
-{
-  "estado": "pospuesto",
-  "notas": "Pendiente de confirmación del proveedor"
-}
-```
-
-La ruta requiere autenticación y solo modifica subtareas del organizador
-autenticado. Un estado o una nota inválidos responden `422`, una subtarea
-inexistente o ajena responde `404`, y un fallo de persistencia responde `502`.
-Si la actualización activa excedería el límite diario configurado, responde
-`409` con el resumen de carga y no guarda ningún cambio.
-
-### Progreso de un evento
-
-El detalle `GET /eventos/{id}` incluye:
-
-```json
-{
-  "total_subtareas": 0,
-  "total_ejecutadas": 0
-}
-```
-
-Los conteos se consultan de nuevo en cada petición, por lo que reflejan los
-cambios de estado persistidos. Un evento sin subtareas devuelve ambos conteos
-en cero. Los estados `hecho`, `hecha`, `completado`, `completada`, `ejecutado`
-y `ejecutada` cuentan como ejecutados; `pospuesto` no.
-
-### Eliminar eventos y subtareas
-
-`DELETE /subtareas/{id}` elimina una subtarea únicamente si pertenece al
-organizador autenticado. `DELETE /eventos/{id}` elimina primero las subtareas
-del evento que pertenecen a ese organizador y después el evento. Ambos
-endpoints solicitan a Supabase la representación de la fila eliminada para
-confirmar que el borrado se persistió; responden `404` si el registro no
-existe o no pertenece al usuario y `502` si la base de datos no confirma el
-borrado o devuelve un error.
-
-### Editar la planificación
-
-La creación y edición de una subtarea comprueban que su fecha no esté en el
-pasado ni después de la fecha del evento, y que el total de horas no exceda
-el límite diario. Las fechas y horas inválidas responden `400` o `422`;
-cuando el cambio excede el límite, la respuesta es `409` e incluye los datos
-del día y las alternativas `mover_fecha` y `reducir_horas`. La actualización
-no se persiste en ese caso.
-
-`PATCH /subtareas/{id}/resolver` solo persiste la reducción si el día queda
-dentro del límite; si todavía lo excede, responde `409` y conserva la
-subtarea sin cambios. `PUT /usuario/configuracion` también comprueba todas
-las fechas planificadas antes de reducir el límite; si alguna excedería la
-nueva capacidad, responde `409` con el detalle por día y no cambia la
-configuración.
-
-
-## Autenticación y aislamiento por organizador
-
-El endpoint `POST /auth/registro` permite crear un nuevo organizador desde cero mediante Supabase Auth.
-
-Ejemplo:
-
-```json
-{
-  "email": "nuevo@ejemplo.com",
-  "password": "clave123"
-}
-```
-
-La contraseña debe tener entre 6 y 72 caracteres. El backend crea el usuario y confirma el correo para que pueda iniciar sesión inmediatamente. Si el correo ya existe, el endpoint responde `409`.
-
-El endpoint `POST /auth/login` autentica al organizador mediante Supabase Auth.
-
-Ejemplo:
-
-```json
-{
-  "email": "organizador@ejemplo.com",
-  "password": "tu_clave"
-}
-```
-
-La respuesta contiene un `access_token`. Para las rutas privadas se debe enviar:
+## Estructura del repositorio
 
 ```text
-Authorization: Bearer <access_token>
+EventHub_Backend/
+├── main.py                 # Punto de entrada: app FastAPI, rutas raíz y auth
+├── auth.py                 # Autenticación con Supabase Auth
+├── database.py             # Cliente de Supabase
+├── modelos.py              # Validaciones, mensajes y constantes de estado
+├── servicios.py            # Lógica de negocio (vencimiento, sobrecarga, progreso)
+├── routers/
+│   ├── eventos.py          # CRUD de eventos
+│   ├── subtareas.py        # CRUD de subtareas, reprogramar y resolver conflictos
+│   ├── hoy.py              # Vista agrupada vencidas / urgentes / próximas
+│   └── usuario.py          # Configuración de horas por día
+├── supabase/
+│   └── schema.sql          # Esquema SQL y políticas RLS
+├── render.yaml             # Despliegue en Render
+├── requirements.txt        # Dependencias de Python
+├── .env.example            # Ejemplo de variables de entorno (no contiene secretos)
+├── .gitignore              # Archivos ignorados por Git
+└── README.md               # Este archivo
 ```
 
-Las consultas de eventos, subtareas y la vista `/hoy` se filtran por el `usuario_id` obtenido de la sesión. El cliente no puede escoger el `usuario_id` del registro que crea.
+---
 
-La base de datos debe tener `usuario_id uuid` en `eventos` y `subtareas`. Revisa `supabase/schema.sql` para la migración.
+## Requisitos previos
 
-## Configuración de horas por día
+- Python 3.10 o superior.
+- `pip` (gestor de paquetes de Python).
+- Una cuenta en [Supabase](https://supabase.com) con un proyecto creado.
+- (Opcional) Cuenta en [Render](https://render.com) para desplegar.
 
-La configuración del límite diario es privada por organizador y requiere autenticación.
+---
 
-- `GET /usuario/configuracion`: devuelve el límite del organizador autenticado.
-- `PUT /usuario/configuracion`: actualiza el límite.
+## Instalación local
 
-Body:
+1. Clona este repositorio:
 
-```json
-{
-  "horas_dia": 8
-}
+```bash
+git clone https://github.com/MP1-UnivalleTeam/EventHub_Backend.git
+cd EventHub_Backend
 ```
 
-`horas_dia` debe ser un número entero entre `1` y `16`. Si el organizador todavía no tiene una configuración guardada, el valor devuelto es `6`.
+2. Crea y activa un entorno virtual:
 
-La vista `GET /hoy` utiliza esta configuración para calcular la sobrecarga de las gestiones no completadas programadas para el día actual. En `resumen` devuelve `horas_programadas_hoy`, `limite_horas_dia`, `sobrecarga` y `exceso_horas`.
-
-## Reprogramar una subtarea
-
-`PATCH /subtareas/{id}/reprogramar` cambia la fecha objetivo de una gestión logística.
-
-```json
-{
-  "dia_objetivo": "2026-05-10",
-  "horas_estimadas": 2,
-  "notas": "Proveedor sin disponibilidad"
-}
+```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\Activate.ps1
+# macOS / Linux:
+source .venv/bin/activate
 ```
 
-- `dia_objetivo` es obligatorio. Una fecha inválida o anterior al día de hoy responde `400` con el detalle `La fecha seleccionada no es válida o es anterior al día de hoy`.
-- `horas_estimadas` es opcional: si se omite se conserva la actual. Debe ser mayor que 0 y no superar 24.
-- `notas` es opcional: si se omite o llega vacía se conserva la nota guardada. Admite hasta 300 caracteres.
-- Solo se pueden reprogramar subtareas del organizador autenticado; una subtarea ajena responde `404`.
+3. Instala las dependencias:
 
-Antes de guardar, el backend calcula las horas resultantes del día destino usando el límite configurado por el organizador. Si el total supera el límite **no se guarda nada** y se responde `409` con la información del conflicto:
-
-```json
-{
-  "detail": "Quedarías con 7h de gestión planificadas (límite 6h)",
-  "conflicto": true,
-  "horas_planificadas": 7,
-  "limite_horas_dia": 6,
-  "exceso_horas": 1,
-  "dia": "2026-05-10",
-  "horas_previas_dia": 5,
-  "horas_subtarea": 2,
-  "subtarea": { "...": "la subtarea sin cambios" },
-  "estrategias_disponibles": ["mover_fecha", "reducir_horas"]
-}
+```bash
+pip install -r requirements.txt
 ```
 
-Seis horas exactas no exceden el límite; seis horas y un décimo sí. Si no hay conflicto la respuesta es `200`:
+4. Copia el archivo de ejemplo de variables de entorno:
 
-```json
-{
-  "message": "Fecha reprogramada exitosamente",
-  "subtarea": { "...": "la subtarea actualizada" },
-  "resumen": { "...": "estado del día destino" },
-  "resumen_origen": { "...": "estado del día de origen" }
-}
+```bash
+# Windows (PowerShell):
+Copy-Item .env.example .env
+
+# macOS / Linux:
+cp .env.example .env
 ```
 
-Cuando el conflicto aparece, las dos opciones de `estrategias_disponibles` se resuelven así: `mover_fecha` es reprogramar otra vez con otra fecha, y `reducir_horas` es `PATCH /subtareas/{id}/resolver`.
+5. Edita `.env` y completa los valores de tu proyecto de Supabase (ver sección [Variables de entorno](#variables-de-entorno)).
 
-## Resolver un conflicto
+---
 
-Un conflicto se resuelve por dos caminos, y cada uno tiene una única operación:
+## Variables de entorno
 
-- **Mover la gestión a otro día** → volver a llamar `PATCH /subtareas/{id}/reprogramar` con la nueva fecha. Si esa fecha deja de sobrecargar el día, se guarda; si no, vuelve a responder `409` sin guardar.
-- **Reducir las horas estimadas** → `PATCH /subtareas/{id}/resolver`.
+Crea un archivo `.env` en la raíz del backend con las siguientes claves. **No subas este archivo a Git.**
 
-```json
-{ "estrategia": "reducir_horas", "horas_estimadas": 1 }
+```env
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=tu_clave_de_rol_de_servicio
+ALLOWED_ORIGINS=https://tu-frontend.vercel.app
+ALLOW_VERCEL_PREVIEWS=false
 ```
 
-`estrategia` solo admite `reducir_horas` y `horas_estimadas` es obligatoria. Cualquier otra estrategia responde `422`.
+Puedes usar `.env.example` como referencia. Los valores reales se configuran como secretos en Render para producción.
 
-La respuesta es `200` con `conflicto_resuelto: true` y el resumen del día si
-la reducción respeta el límite. Si sigue excediéndolo, responde `409` con el
-detalle del conflicto y **no guarda ningún cambio**; reduce más horas o mueve
-la subtarea antes de volver a intentar.
+---
 
-## Mensajes de validación
+## Ejecutar en desarrollo
 
-Los errores de validación (`422`) responden en el formato estándar de FastAPI y cada `msg` está redactado para mostrarse junto al campo en la interfaz:
+```bash
+uvicorn main:app --reload
+```
 
-| Situación | `detail[].msg` |
-|---|---|
-| Límite diario fuera de 1–16 | `El valor debe estar entre 1 y 16 horas diarias.` |
-| Fecha vacía o con formato inválido | `El campo <campo> es obligatorio.` / `La fecha no es válida. Usa el formato AAAA-MM-DD.` |
-| Horas inválidas | `Las horas del evento deben ser mayores que 0.` / `Las horas estimadas de la gestión deben ser mayores que 0.` / `Las horas estimadas de la gestión no pueden superar 24 horas.` |
-| Título o nombre vacío | `El título del evento es obligatorio y no puede estar vacío.` / `El nombre de la subtarea es obligatorio y no puede estar vacío.` |
-| Fecha anterior a hoy al reprogramar | `La fecha seleccionada no es válida o es anterior al día de hoy.` |
+La API estará disponible en:
+
+- `http://127.0.0.1:8000/` — raíz
+- `http://127.0.0.1:8000/docs` — documentación interactiva (Swagger UI)
+- `http://127.0.0.1:8000/health` — estado del servicio y conexión a Supabase
+
+---
+
+## Endpoints principales
+
+### Sistema
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/` | Información del backend |
+| GET | `/health` | Salud del servicio y base de datos |
+
+### Autenticación
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/auth/registro` | Registrar nuevo organizador |
+| POST | `/auth/login` | Iniciar sesión (devuelve `access_token`) |
+
+### Eventos
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/eventos` | Listar eventos del organizador |
+| GET | `/eventos/{id}` | Detalle de un evento |
+| POST | `/eventos` | Crear evento |
+| PUT | `/eventos/{id}` | Actualizar evento |
+| DELETE | `/eventos/{id}` | Eliminar evento y sus subtareas |
+
+### Subtareas
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/subtareas/` | Listar subtareas (filtra por `evento_id` y `estado`) |
+| POST | `/subtareas/` | Crear subtarea |
+| PUT | `/subtareas/{id}` | Actualizar subtarea completa |
+| PATCH | `/subtareas/{id}` | Actualizar parcialmente una subtarea |
+| DELETE | `/subtareas/{id}` | Eliminar una subtarea |
+| PATCH | `/subtareas/{id}/reprogramar` | Reprogramar fecha y horas |
+| PATCH | `/subtareas/{id}/resolver` | Resolver conflicto de sobrecarga |
+
+### Vista Hoy
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/hoy` | Gestiones agrupadas en vencidas, urgentes y próximas |
+
+### Usuario / Configuración
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/usuario/configuracion` | Obtener límite de horas por día |
+| PUT | `/usuario/configuracion` | Actualizar límite de horas por día |
+
+> Los estados válidos para subtareas son: `pendiente`, `pospuesto`, `hecho` y `vencido`.
+
+---
+
+## Despliegue en Render
+
+El archivo `render.yaml` ya está configurado para desplegar automáticamente en Render:
+
+- **Runtime:** Python
+- **Build:** `pip install -r requirements.txt`
+- **Start:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **Health check:** `GET /health`
+
+Configura las siguientes variables de entorno como **Secret Environment Variables** en el panel de Render:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ALLOWED_ORIGINS`
+- `ALLOW_VERCEL_PREVIEWS`
+
+---
+
+## Relación con el frontend
+
+Este backend está diseñado para consumirse desde el frontend de EventHub, que vive en un **repositorio separado**:
+
+- Repositorio frontend: `https://github.com/MP1-UnivalleTeam/EventHub_Frontend.git` (React 19 + Vite, desplegado en Vercel).
+- Documentación del contrato API: este repositorio incluye `README_FRONTEND_API.md` con la documentación de endpoints, payloads y errores.
+
+Cada repositorio es independiente: clona, configura y despliega cada uno por separado.
+
+---
+
+## Contribución
+
+1. Crea una rama desde `main` o `master`.
+2. Realiza tus cambios y prueba localmente con `uvicorn main:app --reload`.
+3. Abre un Pull Request describiendo el cambio y cómo se probó.
+
+---
+
+## Licencia
+
+no definido.
