@@ -41,6 +41,7 @@ from servicios import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/subtareas", tags=["Subtareas"])
+MAX_COMPROBANTE_BYTES = 10 * 1024 * 1024
 
 
 def _fecha_valida_o_error(fecha: date) -> date:
@@ -793,6 +794,18 @@ def resolver_conflicto(
             "model": MensajeErrorResponse,
             "description": "Subtarea no encontrada para el usuario autenticado.",
         },
+        400: {
+            "model": MensajeErrorResponse,
+            "description": "El archivo de imagen está vacío.",
+        },
+        413: {
+            "model": MensajeErrorResponse,
+            "description": "La imagen supera el tamaño máximo permitido de 10 MB.",
+        },
+        415: {
+            "model": MensajeErrorResponse,
+            "description": "El archivo debe ser una imagen.",
+        },
         502: {
             "model": MensajeErrorResponse,
             "description": "Error subiendo la imagen o guardando la URL.",
@@ -826,6 +839,26 @@ def subir_comprobante(
         )
 
     try:
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="El archivo debe ser una imagen.",
+            )
+
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El archivo de imagen está vacío.",
+            )
+        if file_size > MAX_COMPROBANTE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="La imagen debe pesar 10 MB o menos.",
+            )
+
         # Subir a Cloudinary en la carpeta eventhub/comprobantes
         resultado = cloudinary.uploader.upload(
             file.file,

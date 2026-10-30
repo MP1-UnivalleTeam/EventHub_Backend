@@ -741,5 +741,11 @@ class FotoPerfilResponse(BaseModel):
     foto_perfil_url: str
 
 
+class PerfilUsuarioResponse(BaseModel):
+    nombre: str
+    apellido: str
+    email: str
+
+
 class MensajeErrorResponse(BaseModel):
     detail: str = Field(..., description="Mensaje funcional del error.")

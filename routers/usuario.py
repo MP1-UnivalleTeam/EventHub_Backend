@@ -10,6 +10,7 @@ from modelos import (
     ConfiguracionUsuarioResponse,
     FotoPerfilResponse,
     MensajeErrorResponse,
+    PerfilUsuarioResponse,
 )
 from servicios import (
     LIMITE_HORAS_DIA_POR_DEFECTO,
@@ -176,6 +177,57 @@ def actualizar_configuracion(
 # ============================================================
 # FOTO DE PERFIL (Supabase Storage)
 # ============================================================
+
+@router.get(
+    "/perfil",
+    response_model=PerfilUsuarioResponse,
+    responses={
+        401: {
+            "model": MensajeErrorResponse,
+            "description": "Falta el token de autenticación.",
+        },
+        404: {
+            "model": MensajeErrorResponse,
+            "description": "Perfil no encontrado.",
+        },
+        502: {
+            "model": MensajeErrorResponse,
+            "description": "Error consultando el perfil.",
+        },
+    },
+)
+def obtener_perfil(
+    current_user: dict = Depends(get_current_user),
+):
+    usuario_id = current_user["id"]
+
+    try:
+        response = (
+            supabase
+            .table("usuarios")
+            .select("nombre, apellido, email")
+            .eq("usuario_id", usuario_id)
+            .limit(1)
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Perfil de usuario no encontrado.",
+            )
+
+        return response.data[0]
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Error consultando el perfil de usuario")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="No fue posible consultar el perfil del usuario.",
+        ) from error
+
 
 def _ruta_foto_perfil(usuario_id: str) -> str:
     """Ruta del archivo dentro del bucket de Supabase Storage."""
