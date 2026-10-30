@@ -2,12 +2,16 @@ import logging
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, status, UploadFile
 from fastapi.responses import JSONResponse
 
+import cloudinary.uploader
+
 from auth import get_current_user
+from cloudinary_config import configurar_cloudinary
 from database import supabase
 from modelos import (
+    ComprobanteSubidaResponse,
     ConflictoSobreCargaResponse,
     MensajeErrorResponse,
     ReprogramarSubtareaRequest,
@@ -243,6 +247,7 @@ def crear_subtarea(
             "horas_estimadas": subtarea.horas_estimadas,
             "estado": subtarea.estado,
             "notas": subtarea.notas,
+            "responsable": subtarea.responsable,
             "usuario_id": usuario_id,
         }
 
@@ -765,4 +770,103 @@ def resolver_conflicto(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Error al resolver el conflicto.",
+        ) from error
+
+
+# ============================================================
+# COMPROBANTE DE IMAGEN (Cloudinary)
+# ============================================================
+
+@router.post(
+    "/{subtarea_id}/comprobante",
+    response_model=ComprobanteSubidaResponse,
+    responses={
+        200: {
+            "model": ComprobanteSubidaResponse,
+            "description": "Imagen subida y URL guardada en la subtarea.",
+        },
+        401: {
+            "model": MensajeErrorResponse,
+            "description": "Falta el token de autenticación.",
+        },
+        404: {
+            "model": MensajeErrorResponse,
+            "description": "Subtarea no encontrada para el usuario autenticado.",
+        },
+        502: {
+            "model": MensajeErrorResponse,
+            "description": "Error subiendo la imagen o guardando la URL.",
+        },
+    },
+)
+def subir_comprobante(
+    subtarea_id: str,
+    current_user: dict = Depends(get_current_user),
+    file: UploadFile = File(...),
+):
+    """
+    Sube una imagen de comprobante (justificante de posposición) a Cloudinary
+    y guarda la URL pública en la columna `comprobante_url` de la subtarea.
+
+    Requiere que las variables de entorno de Cloudinary estén configuradas
+    (ver cloudinary_config.py).
+    """
+    if not configurar_cloudinary():
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Cloudinary no está configurado en el servidor.",
+        )
+
+    # Verificar que la subtarea pertenece al usuario autenticado.
+    subtarea = obtener_subtarea_del_usuario(subtarea_id, current_user["id"])
+    if not subtarea:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subtarea no encontrada.",
+        )
+
+    try:
+        # Subir a Cloudinary en la carpeta eventhub/comprobantes
+        resultado = cloudinary.uploader.upload(
+            file.file,
+            folder="eventhub/comprobantes",
+            resource_type="image",
+        )
+
+        comprobante_url = resultado.get("secure_url")
+        if not comprobante_url:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Cloudinary no devolvió una URL válida.",
+            )
+
+        # Persistir la URL en la subtarea
+        response = (
+            supabase
+            .table("subtareas")
+            .update({"comprobante_url": comprobante_url})
+            .eq("id", subtarea_id)
+            .eq("usuario_id", current_user["id"])
+            .execute()
+        )
+
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No se pudo guardar la URL del comprobante.",
+            )
+
+        return {
+            "message": "Comprobante subido correctamente.",
+            "subtarea_id": subtarea_id,
+            "comprobante_url": comprobante_url,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.exception("Error al subir comprobante a Cloudinary")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Error al subir la imagen de comprobante.",
         ) from error

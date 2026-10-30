@@ -4,8 +4,12 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import supabase, supabase_admin, supabase_auth
+from cloudinary_config import configurar_cloudinary
 from modelos import LoginRequest, RegistroRequest
 from routers import eventos, hoy, subtareas, usuario
+
+# Inicializar Cloudinary si las credenciales están disponibles.
+configurar_cloudinary()
 
 
 app = FastAPI(
