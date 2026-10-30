@@ -1,4 +1,5 @@
 import logging
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, status, UploadFile
 from fastapi.responses import JSONResponse
@@ -404,6 +405,9 @@ def subir_foto_perfil(
 
         # Obtener URL pública del archivo
         url_publica = supabase.storage.from_(BUCKET_PERFILES).get_public_url(ruta)
+        # Versiona la URL persistida al reemplazar el objeto en la misma ruta.
+        separador = "&" if "?" in url_publica else "?"
+        url_publica = f"{url_publica}{separador}v={uuid4().hex}"
 
         # Guardar la URL en la tabla usuarios
         response = (
@@ -411,6 +415,7 @@ def subir_foto_perfil(
             .table("usuarios")
             .update({"foto_perfil_url": url_publica})
             .eq("usuario_id", usuario_id)
+            .select("foto_perfil_url")
             .execute()
         )
 
@@ -418,6 +423,12 @@ def subir_foto_perfil(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Usuario no encontrado para guardar la foto.",
+            )
+
+        if response.data[0].get("foto_perfil_url") != url_publica:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="No se pudo confirmar la URL de la foto guardada.",
             )
 
         return {
