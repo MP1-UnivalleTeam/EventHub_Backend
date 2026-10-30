@@ -87,3 +87,7 @@ with check (auth.uid() = usuario_id);
 
 alter table public.subtareas
   add column if not exists motivo_posposicion varchar(500);
+
+-- Columna responsable para subtareas (quién ejecuta la gestión)
+alter table public.subtareas
+  add column if not exists responsable varchar(150) null;
