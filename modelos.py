@@ -231,6 +231,16 @@ class Subtarea(BaseModel):
     horas_estimadas: float = Field(..., gt=0, le=24)
     estado: str = Field(default="pendiente")
     notas: Optional[str] = Field(default=None, max_length=300)
+    responsable: Optional[str] = Field(
+        default=None,
+        max_length=150,
+        description="Persona responsable de ejecutar la subtarea.",
+    )
+    comprobante_url: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="URL del comprobante subido a Cloudinary.",
+    )
 
     @field_validator("estado", mode="before")
     @classmethod
@@ -256,6 +266,17 @@ class Subtarea(BaseModel):
         if len(nota) > 300:
             raise ValueError(MENSAJE_NOTA_SUBTAREA)
         return nota or None
+
+    @field_validator("responsable", mode="before")
+    @classmethod
+    def limpiar_responsable(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("El responsable debe ser texto o quedar vacío.")
+
+        responsable = value.strip()
+        return responsable or None
 
     @field_validator("titulo", mode="before")
     def subtitulo_no_vacio(cls, value: Any) -> Any:
@@ -315,6 +336,12 @@ class SubtareaActualizarParcial(BaseModel):
         max_length=300
     )
 
+    responsable: Optional[str] = Field(
+        default=None,
+        max_length=150,
+        description="Persona responsable de ejecutar la subtarea.",
+    )
+
     @field_validator("estado", mode="before")
     @classmethod
     def validar_estado(cls, value: Any) -> Any:
@@ -341,6 +368,17 @@ class SubtareaActualizarParcial(BaseModel):
         if len(nota) > 300:
             raise ValueError(MENSAJE_NOTA_SUBTAREA)
         return nota or None
+
+    @field_validator("responsable", mode="before")
+    @classmethod
+    def limpiar_responsable(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("El responsable debe ser texto o quedar vacío.")
+
+        responsable = value.strip()
+        return responsable or None
 
     @field_validator("titulo", mode="before")
     def subtitulo_no_vacio(
@@ -468,7 +506,7 @@ class ConfiguracionUsuarioResponse(BaseModel):
 
 
 # ============================================================
-# BE-01 / BE-03 / BE-04 — reprogramación y resolución de conflictos
+# BE-01 / BE-03 / BE-04 — reprogramación y resolución de conflictos.
 # ============================================================
 
 class ReprogramarSubtareaRequest(BaseModel):
@@ -686,6 +724,40 @@ class ResolverConflictoResponse(BaseModel):
     )
     subtarea: dict[str, Any]
     resumen: ResumenSobrecargaDia
+
+
+class ComprobanteSubidaResponse(BaseModel):
+    """Respuesta al subir un comprobante de imagen a Cloudinary."""
+
+    message: str
+    subtarea_id: str
+    comprobante_url: str
+
+
+class FotoPerfilResponse(BaseModel):
+    """Respuesta al subir/actualizar la foto de perfil en Supabase Storage."""
+
+    message: str
+    foto_perfil_url: str
+
+
+class PerfilUsuarioResponse(BaseModel):
+    nombre: str
+    apellido: str
+    email: str
+
+
+class PerfilUsuarioActualizarRequest(BaseModel):
+    nombre: str = Field(..., min_length=2, max_length=100)
+    apellido: str = Field(..., min_length=2, max_length=100)
+
+    @field_validator("nombre", "apellido")
+    @classmethod
+    def limpiar_nombre_apellido(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("El nombre y apellido deben tener al menos 2 caracteres.")
+        return value
 
 
 class MensajeErrorResponse(BaseModel):
