@@ -3,5 +3,6 @@ pydantic>=2.9,<3.0
 uvicorn[standard]>=0.27,<1.0
 supabase>=2.0,<3.0
 cloudinary>=1.41.0,<2.0
+python-multipart>=0.0.18,<1.0
 python-dotenv>=1.0,<2.0
 tzdata>=2024.1
